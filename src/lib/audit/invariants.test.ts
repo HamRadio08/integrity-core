@@ -24,6 +24,39 @@ describe("forensic invariants", () => {
     );
   });
 
+  it("reports a NaN-poisoned record as a chain break instead of throwing", () => {
+    // The seal now refuses non-finite values, so a record carrying one can only have
+    // arrived by tampering or from a legacy writer. verifyIntegrity must survive it and
+    // grade it — a throw here would kill the whole report and hide every other finding.
+    const bundle = getDemoBundle();
+    const poisoned = bundle.records.map((record, index) => {
+      if (index !== 3) return record;
+      const [first, ...rest] = record.evaluations;
+      return {
+        ...record,
+        evaluations: [
+          { ...first, evidence: { ...first.evidence, metrics: { ...first.evidence.metrics, adx: NaN } } },
+          ...rest,
+        ],
+      } as CandidateRecord;
+    });
+    let report!: ReturnType<typeof verifyIntegrity>;
+    expect(() => {
+      report = verifyIntegrity({
+        records: poisoned,
+        config: STACK_CONFIG,
+        barsByCandidate: bundle.barsByCandidate,
+        genesisDigest: bundle.genesisDigest,
+        seed: bundle.seed,
+        startedAt: bundle.startedAt,
+        expectedAttestation: bundle.attestationDigest,
+      });
+    }).not.toThrow();
+    expect(report.ok).toBe(false);
+    expect(report.checks.find((check) => check.id === "hash-chain")?.severity).toBe("fail");
+    expect(report.checks.find((check) => check.id === "hash-chain")?.detail).toContain("3");
+  });
+
   it("detects a post-seal kill-reason overwrite", () => {
     const bundle = getDemoBundle();
     const poisoned = bundle.records.map((record, index) =>

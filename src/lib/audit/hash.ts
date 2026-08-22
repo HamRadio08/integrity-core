@@ -1,12 +1,26 @@
 import { createHash } from "node:crypto";
 
+/** Thrown when a payload carries a value that must never be sealed. */
+export class NonFiniteSealError extends RangeError {
+  constructor(value: number) {
+    super(
+      `refusing to seal a non-finite number (${
+        Number.isNaN(value) ? "NaN" : value > 0 ? "Infinity" : "-Infinity"
+      }): the computation that produced it broke, and hashing it would attest a broken result as a valid one.`,
+    );
+    this.name = "NonFiniteSealError";
+  }
+}
+
 export function canonicalize(value: unknown): string {
   if (value === null) return "null";
   if (typeof value === "number") {
-    if (Number.isNaN(value)) return "NaN";
-    if (value === Infinity) return "Infinity";
-    if (value === -Infinity) return "-Infinity";
-    return Number.isInteger(value) ? JSON.stringify(value) : JSON.stringify(value);
+    // Fail loud. Previously NaN/Infinity were emitted as bare tokens, which is (a) not
+    // valid JSON and (b) a STABLE digest for a broken computation — so the chain verified
+    // and the corruption rode through sealed. invariants.finiteMetrics already treats
+    // non-finite as a violation; the seal must not disagree with it.
+    if (!Number.isFinite(value)) throw new NonFiniteSealError(value);
+    return JSON.stringify(value);
   }
   if (typeof value !== "object") return JSON.stringify(value);
   if (Array.isArray(value)) {

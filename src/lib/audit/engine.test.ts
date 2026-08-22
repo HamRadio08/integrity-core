@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { STACK_CONFIG } from "./config";
 import { digestBars, evaluateCandidate, sealRecord } from "./engine";
 import { emaSeries } from "./indicators";
-import { digestOf, GENESIS } from "./hash";
+import { canonicalize, digestOf, GENESIS, NonFiniteSealError } from "./hash";
 import { buildLiveUniverse, evaluateLive, loadTape } from "./market";
 
 describe("live tape", () => {
@@ -63,5 +63,25 @@ describe("sealing", () => {
 
   it("canonical JSON is key-order invariant", () => {
     expect(digestOf({ b: 1, a: 2 })).toBe(digestOf({ a: 2, b: 1 }));
+  });
+
+  it("refuses to seal a non-finite number instead of hashing it", () => {
+    // Regression: these used to canonicalize to the bare tokens NaN / Infinity, which is
+    // invalid JSON AND a stable digest — a broken computation sealed as a valid record.
+    for (const bad of [NaN, Infinity, -Infinity]) {
+      expect(() => digestOf({ close: bad })).toThrow(NonFiniteSealError);
+      expect(() => canonicalize(bad)).toThrow(NonFiniteSealError);
+    }
+    // Nested and array positions are covered by the same recursion.
+    expect(() => digestOf({ metrics: { adx: NaN } })).toThrow(NonFiniteSealError);
+    expect(() => digestOf([1, 2, Infinity])).toThrow(NonFiniteSealError);
+  });
+
+  it("still seals every finite value, including the awkward ones", () => {
+    for (const ok of [0, -0, 1e-12, -1.5, Number.MAX_SAFE_INTEGER]) {
+      expect(() => digestOf({ close: ok })).not.toThrow();
+    }
+    // Canonical output stays parseable JSON for finite payloads.
+    expect(JSON.parse(canonicalize({ b: 1, a: [2, 3] }))).toEqual({ a: [2, 3], b: 1 });
   });
 });
