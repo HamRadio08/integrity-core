@@ -141,7 +141,14 @@ export function verifyIntegrity(input: {
     const expectedPrev = index === 0 ? genesisDigest : input.records[index - 1].recordDigest;
     if (record.prevDigest !== expectedPrev) chainBreaks.push(index);
     const { recordDigest, ...body } = record;
-    if (digestOf(body) !== recordDigest) chainBreaks.push(index);
+    // A stored record carrying a non-finite metric makes digestOf throw (NonFiniteSealError).
+    // The verifier's job is to REPORT a contaminated record, never to die on one — a crash
+    // here would take down the whole report and hide every other finding in the run.
+    try {
+      if (digestOf(body) !== recordDigest) chainBreaks.push(index);
+    } catch {
+      chainBreaks.push(index);
+    }
   });
   const uniqueBreaks = [...new Set(chainBreaks)];
   checks.push({
