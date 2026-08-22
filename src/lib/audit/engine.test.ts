@@ -3,7 +3,58 @@ import { STACK_CONFIG } from "./config";
 import { digestBars, evaluateCandidate, sealRecord } from "./engine";
 import { emaSeries } from "./indicators";
 import { canonicalize, digestOf, GENESIS, NonFiniteSealError } from "./hash";
+import { GATE_EVALUATORS, buildContext } from "./gates";
 import { buildLiveUniverse, evaluateLive, loadTape } from "./market";
+import type { Bar, Candidate } from "./types";
+
+describe("degenerate input never produces a non-finite metric", () => {
+  // Swept across ALL gates rather than the two that were found by hand. Spot-checking
+  // divisions is what let this through: gates.ts:54 and :161 look guarded (`close === 0`,
+  // `Math.min(20, bars.length)`) and are — against zero, not against `undefined`.
+  const withBars = (symbol: string, bars: Bar[]): Candidate => ({
+    id: `degenerate-${symbol}`,
+    symbol,
+    name: symbol,
+    sector: "Test",
+    market: "crypto",
+    tier: 1,
+    asOf: "2026-08-22",
+    origin: "live-tape",
+    last: 0,
+    chg5d: null,
+    chg20d: null,
+    bars,
+  });
+
+  const DEGENERATE: Array<[string, Candidate]> = [["zero bars", withBars("EMPTY", [])]];
+
+  for (const [label, candidate] of DEGENERATE) {
+    it(`every gate emits finite-or-null metrics on ${label}`, () => {
+      const ctx = buildContext(candidate, STACK_CONFIG);
+      for (const [gateId, evaluate] of Object.entries(GATE_EVALUATORS)) {
+        const result = evaluate(ctx);
+        for (const [key, value] of Object.entries(result.evidence.metrics)) {
+          if (typeof value === "number") {
+            expect(
+              Number.isFinite(value),
+              `${gateId}.${key} is ${value}; emit null for an uncomputable metric`,
+            ).toBe(true);
+          }
+        }
+      }
+    });
+
+    it(`evaluateCandidate seals ${label} instead of throwing`, () => {
+      // Regression: trend_sep emitted sepPct=NaN and tier_reject emitted adv=NaN, so the
+      // seal (correctly) refused and the whole run died on one bad candidate. A candidate
+      // with no history is a FAIL, not a crash.
+      expect(() => evaluateCandidate(candidate, STACK_CONFIG)).not.toThrow();
+      const res = evaluateCandidate(candidate, STACK_CONFIG);
+      expect(res.outcome).toBe("KILLED");
+      expect(res.killGate).toBe("trend_sep"); // first gate fails; the rest are SKIP
+    });
+  }
+});
 
 describe("live tape", () => {
   it("only carries venue prints, with BTC through 75,000", () => {

@@ -28,6 +28,28 @@ export interface GateResult {
   evidence: GateEvidence;
 }
 
+/**
+ * Emit a metric only if it is a real number; otherwise `null`, meaning "not computed".
+ *
+ * `null` is already this codebase's convention for an unevaluable metric — accel_gate
+ * returns `{ roc: null, priorRoc: null, accel: null }` when its window is longer than the
+ * sealed history. This makes the other gates agree with it.
+ *
+ * Why it matters: a gate can decide FAIL correctly and still put a NaN in its evidence.
+ * evaluateTrendSep does exactly that — `!Number.isFinite(sepPct)` sets the right status,
+ * but the NaN went into metrics regardless. That NaN then reaches the seal, where
+ * canonicalize() throws NonFiniteSealError and takes down the entire run. Measured on a
+ * zero-bar candidate: trend_sep emitted sepPct=NaN, tier_reject emitted adv=NaN, and
+ * evaluateCandidate threw instead of returning a record.
+ *
+ * This does NOT relax the seal. A non-finite a gate failed to normalize still throws —
+ * that guarantee is the whole point. This stops gates from producing them, so the throw
+ * is reserved for genuinely broken arithmetic instead of a candidate with no bars.
+ */
+function finiteOrNull(value: number): number | null {
+  return Number.isFinite(value) ? value : null;
+}
+
 export function buildContext(
   candidate: Candidate,
   config: StackConfig = STACK_CONFIG,
@@ -82,8 +104,8 @@ export function evaluateTrendSep(ctx: GateContext): GateResult {
         close: round(close, 4),
         emaFast: round(fast),
         emaSlow: round(slow),
-        sepPct: round(sepPct),
-        absSepPct: round(absSep),
+        sepPct: finiteOrNull(round(sepPct)),
+        absSepPct: finiteOrNull(round(absSep)),
         crossed,
         barsUsed: ctx.bars.length,
       },
@@ -178,7 +200,7 @@ export function evaluateTier(ctx: GateContext): GateResult {
     evidence: {
       metrics: {
         tier: ctx.candidate.tier,
-        adv: round(adv, 2),
+        adv: finiteOrNull(round(adv, 2)),
         barsUsed: lookback,
       },
       reason,
