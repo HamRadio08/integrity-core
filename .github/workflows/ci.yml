@@ -6,7 +6,13 @@
 # the only signal would be whoever happened to run `npm test` by hand.
 #
 # Four legs, all REQUIRED. None of them may be made advisory without replacing the coverage:
-#   typecheck  — tsc --noEmit. `next build` type-checks pages but not scripts/ or bare .ts libs.
+#   typecheck  — next typegen && tsc --noEmit. `next build` type-checks pages but not scripts/ or
+#                bare .ts libs. The typegen prefix is load-bearing: app/layout.tsx references
+#                LayoutProps, which Next GENERATES into .next/types. A clean checkout has no
+#                .next, so a bare `tsc --noEmit` dies with "Cannot find name 'LayoutProps'" —
+#                which is exactly how this workflow failed on its own first run, and again on
+#                main. It passed locally only because an earlier `npm run build` had left .next
+#                behind. typegen emits those definitions without paying for a full build.
 #   lint       — eslint --max-warnings 0. Zero-tolerance is affordable because the tree is clean
 #                today; letting warnings accumulate is how a lint gate becomes decoration.
 #   test       — vitest. This is the one that actually asserts the forensic invariants.
@@ -39,7 +45,9 @@ jobs:
 
       # TODO(harden): pin to a digest like the checkout above. Left as a tag deliberately
       # rather than inventing a hash that was never verified against the upstream repo.
-      - uses: actions/setup-node@v4
+      # v5, not v4: v4 targets Node 20, which the runner now force-migrates to Node 24
+      # with a deprecation warning on every run.
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
