@@ -8,7 +8,7 @@
     "start": "next start --port 43173 --hostname 127.0.0.1",
     "lint": "eslint --max-warnings 0",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "next typegen && tsc --noEmit",
     "attest": "tsx scripts/attest.ts",
     "tape": "tsx scripts/fetch-tape.ts"
   },
