@@ -1,0 +1,62 @@
+# CI — the forensic guarantees need a guard of their own.
+#
+# This repo's entire product is verification: hash-chained records, replay-reproduces-digest,
+# no-look-ahead indicators, kill attribution. Until this workflow existed there was NOTHING
+# checking any of that automatically — a change could quietly break a sealing invariant and
+# the only signal would be whoever happened to run `npm test` by hand.
+#
+# Four legs, all REQUIRED. None of them may be made advisory without replacing the coverage:
+#   typecheck  — tsc --noEmit. `next build` type-checks pages but not scripts/ or bare .ts libs.
+#   lint       — eslint --max-warnings 0. Zero-tolerance is affordable because the tree is clean
+#                today; letting warnings accumulate is how a lint gate becomes decoration.
+#   test       — vitest. This is the one that actually asserts the forensic invariants.
+#   build      — next build. Catches the break that only surfaces when the app is assembled.
+#
+# Runs on push to main AND on pull_request so a PR is graded before merge, not after.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # SHA-pinned: this digest is the one already trusted by the sibling repo
+      # (HamRadio08/ai-trading-agents) on every one of its workflows.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      # TODO(harden): pin to a digest like the checkout above. Left as a tag deliberately
+      # rather than inventing a hash that was never verified against the upstream repo.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      # `npm ci` not `npm install` — installs exactly the lockfile, and fails loudly if
+      # package.json and package-lock.json have drifted apart.
+      - name: Install (locked)
+        run: npm ci
+
+      - name: Typecheck (tsc --noEmit)
+        run: npm run typecheck
+
+      - name: Lint (zero warnings)
+        run: npm run lint
+
+      - name: Test (forensic invariants)
+        run: npm test
+
+      - name: Build
+        run: npm run build
