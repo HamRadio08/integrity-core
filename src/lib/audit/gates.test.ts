@@ -50,7 +50,62 @@ describe("tier_reject ADV respects per-market volume units", () => {
     // close * volume form read this as ~$415 and killed it on the liquidity floor.
     const shib = candidate("crypto", 6.03e-6, 8.34e7);
     const result = evaluateTier(buildContext(shib, STACK_CONFIG));
-    expect(result.evidence.metrics.adv).toBeGreaterThan(STACK_CONFIG.tierReject.minAdv);
+    expect(result.evidence.metrics.adv).toBeGreaterThan(STACK_CONFIG.tierReject.minAdv.crypto);
     expect(result.status).toBe("PASS");
+  });
+});
+
+// One floor cannot serve both universes, so tierReject.minAdv is keyed by market. Each
+// candidate must be judged against ITS OWN market's floor, and the resolved scalar - not
+// the map - is what gets sealed, so the evidence payload shape does not change.
+describe("tier_reject applies the floor for the candidate's own market", () => {
+  const bars = (close: number, volume: number): Bar[] =>
+    Array.from({ length: 20 }, (_, i) => ({
+      ts: `2026-08-${String(i + 1).padStart(2, "0")}`,
+      open: close,
+      high: close,
+      low: close,
+      close,
+      volume,
+    }));
+
+  const candidate = (market: Market, close: number, volume: number): Candidate => ({
+    id: `floor-${market}`,
+    symbol: "TEST",
+    name: "Test",
+    sector: "Test",
+    market,
+    tier: 1,
+    asOf: "2026-08-22",
+    origin: "live-tape",
+    last: close,
+    chg5d: null,
+    chg20d: null,
+    bars: bars(close, volume),
+  });
+
+  // Floors far enough apart that reading the wrong one inverts the verdict.
+  const split = {
+    ...STACK_CONFIG,
+    tierReject: { ...STACK_CONFIG.tierReject, minAdv: { crypto: 1e9, equity: 1e6 } },
+  };
+
+  it("fails a coin under the crypto floor that would clear the equity one", () => {
+    // Crypto volume is already USD, so this is $10M ADV: over equity's $1M, under crypto's $1B.
+    const result = evaluateTier(buildContext(candidate("crypto", 10, 1e7), split));
+    expect(result.status).toBe("FAIL");
+    expect(result.evidence.reason).toContain("below");
+  });
+
+  it("passes a stock over the equity floor that would fail the crypto one", () => {
+    // Equity volume is a share count, so 1e7 shares at $10 is $100M ADV against a $1M floor.
+    const result = evaluateTier(buildContext(candidate("equity", 10, 1e7), split));
+    expect(result.status).toBe("PASS");
+  });
+
+  it("seals the resolved scalar floor, never the map", () => {
+    const result = evaluateTier(buildContext(candidate("crypto", 10, 1e7), split));
+    expect(result.params.minAdv).toBe(1e9);
+    expect(typeof result.params.minAdv).toBe("number");
   });
 });

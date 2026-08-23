@@ -62,7 +62,11 @@ export interface VolumeParams {
 
 export interface TierParams {
   maxTier: number;
-  minAdv: number;
+  // Keyed by market: ADV is a dollar figure on both sides, but the crypto and equity
+  // universes sit orders of magnitude apart, so one floor cannot serve both. evaluateTier
+  // resolves this to the scalar for the candidate's own market before sealing, so the
+  // evidence payload keeps carrying a plain number and the record shape is unchanged.
+  minAdv: Record<Market, number>;
 }
 
 export interface AccelParams {

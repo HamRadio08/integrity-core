@@ -20,7 +20,26 @@ export const STACK_CONFIG: StackConfig = {
   },
   tierReject: {
     maxTier: 3,
-    minAdv: 2_000_000,
+    // Per-market liquidity floors. A single floor could not be right for both: ADV is a
+    // dollar figure on each side, but the two universes sit three orders of magnitude
+    // apart, so one number is either dead on one side or brutal on the other.
+    //
+    // Both values are the 2_000_000 this repo already carried, so this is a STRUCTURE
+    // change with zero behaviour change. Read that as a knob installed unarmed, not as a
+    // calibration: measured over the committed tape (20-bar ADV, correct units), the
+    // screen is INERT on both sides today --
+    //
+    //   crypto  n=18   thinnest ATOM  $27.0M   median $186M   -> 0 below the floor
+    //   equity  n=99   thinnest LCID  $79.0M   median $1.37B  -> 0 below the floor
+    //
+    // The thinnest asset in the whole universe clears the floor by 13x. tier_reject's
+    // role contract targets a ~7% kill share; the ADV half contributes 0% of it, and
+    // every tier_reject kill observed so far came from the maxTier check alone.
+    //
+    // Arming these is a trading decision, not a code one: a liquidity floor should come
+    // from intended order size (the usual anchor is an order <= 1% of ADV), which this
+    // repo does not model. Set them from that, not from a percentile of today's tape.
+    minAdv: { crypto: 2_000_000, equity: 2_000_000 },
   },
   accelGate: {
     lookback: 5,
