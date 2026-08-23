@@ -180,7 +180,15 @@ export function evaluateTier(ctx: GateContext): GateResult {
   const { maxTier, minAdv } = ctx.config.tierReject;
   const lookback = Math.min(20, ctx.bars.length);
   const slice = ctx.bars.slice(-lookback);
-  const adv = slice.reduce((sum, bar) => sum + bar.close * bar.volume, 0) / lookback;
+  // Volume units differ by market: Yahoo reports equity volume as a share count, but crypto
+  // volume already denominated in USD. Multiplying crypto volume by close double-counts price
+  // -- inflating ADV above $1 (BTC read ~1e15) and shrinking it below $1 (SHIB read ~$400
+  // against a real ~$83M, which false-FAILs the liquidity screen).
+  const adv =
+    slice.reduce(
+      (sum, bar) => sum + (ctx.candidate.market === "crypto" ? bar.volume : bar.close * bar.volume),
+      0,
+    ) / lookback;
   const tierOk = ctx.candidate.tier <= maxTier;
   const advOk = adv >= minAdv;
   const status = tierOk && advOk ? "PASS" : "FAIL";
