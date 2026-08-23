@@ -36,10 +36,33 @@ export const STACK_CONFIG: StackConfig = {
     // role contract targets a ~7% kill share; the ADV half contributes 0% of it, and
     // every tier_reject kill observed so far came from the maxTier check alone.
     //
-    // Arming these is a trading decision, not a code one: a liquidity floor should come
-    // from intended order size (the usual anchor is an order <= 1% of ADV), which this
-    // repo does not model. Set them from that, not from a percentile of today's tape.
-    minAdv: { crypto: 2_000_000, equity: 2_000_000 },
+    // WHAT THESE ARE FOR. The obvious anchor - size the floor off intended order size,
+    // the usual rule being an order <= 1% of ADV - turns out not to apply here. Solving
+    // it against this universe:
+    //
+    //   order    floor (100x)   crypto killed   equity killed
+    //   $10k     $1M            0/18            0/99
+    //   $100k    $10M           0/18            0/99
+    //   $500k    $50M           2/18            0/99
+    //
+    // The floor does not bite until an order of ~$270k (crypto, ATOM) or ~$790k (equity,
+    // LCID). Below that it is inert by construction, because every name here is already
+    // institutionally liquid. So as a size-vs-liquidity screen this gate has nothing to
+    // do at any plausible scale, and no order-size input would change that.
+    //
+    // Its remaining job is a UNIVERSE-DRIFT TRIPWIRE: catch a genuinely thin asset being
+    // added to the universe, before it is traded. Calibrated for that, the floor wants to
+    // sit far enough under today's thinnest name to never fire on ordinary volume swings,
+    // but far enough over zero to catch something an order of magnitude thinner:
+    //
+    //   crypto   $5M   vs thinnest ATOM $27.0M   -> 5.4x headroom
+    //   equity  $10M   vs thinnest LCID $79.0M   -> 7.9x headroom
+    //
+    // Both still kill 0 of 117 today, so this is armed-but-silent by design: it changes
+    // no current verdict and only speaks when the universe changes under it. If the
+    // universe ever does grow a long tail, revisit - at that point order size becomes the
+    // right anchor again.
+    minAdv: { crypto: 5_000_000, equity: 10_000_000 },
   },
   accelGate: {
     lookback: 5,

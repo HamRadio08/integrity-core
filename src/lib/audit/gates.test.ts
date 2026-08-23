@@ -109,3 +109,51 @@ describe("tier_reject applies the floor for the candidate's own market", () => {
     expect(typeof result.params.minAdv).toBe("number");
   });
 });
+
+// The shipped floors are a universe-drift tripwire, not a size-vs-liquidity screen: they
+// must stay silent on the thinnest names actually in the universe while still catching an
+// asset an order of magnitude thinner. These pin both ends of that headroom, so a later
+// edit that arms the floors too tight (false-killing real names) or too loose (back to
+// inert) fails here rather than silently changing what the gate means.
+describe("shipped ADV floors behave as a universe-drift tripwire", () => {
+  const bars = (close: number, volume: number): Bar[] =>
+    Array.from({ length: 20 }, (_, i) => ({
+      ts: `2026-08-${String(i + 1).padStart(2, "0")}`,
+      open: close,
+      high: close,
+      low: close,
+      close,
+      volume,
+    }));
+
+  const candidate = (market: Market, close: number, volume: number): Candidate => ({
+    id: `tripwire-${market}-${volume}`,
+    symbol: "TEST",
+    name: "Test",
+    sector: "Test",
+    market,
+    tier: 1,
+    asOf: "2026-08-22",
+    origin: "live-tape",
+    last: close,
+    chg5d: null,
+    chg20d: null,
+    bars: bars(close, volume),
+  });
+
+  const statusOf = (c: Candidate) => evaluateTier(buildContext(c, STACK_CONFIG)).status;
+
+  it("stays silent on the thinnest names currently in the universe", () => {
+    // ATOM-shaped: $27.0M ADV, the thinnest coin on the tape. Crypto volume is USD.
+    expect(statusOf(candidate("crypto", 1.57, 2.7e7))).toBe("PASS");
+    // LCID-shaped: $79.0M ADV, the thinnest equity. 14.3M shares at $5.51.
+    expect(statusOf(candidate("equity", 5.51, 1.434e7))).toBe("PASS");
+  });
+
+  it("fires on an asset an order of magnitude thinner", () => {
+    // $1M of crypto volume, against the $5M floor.
+    expect(statusOf(candidate("crypto", 1.57, 1e6))).toBe("FAIL");
+    // 400k shares at $5.51 is ~$2.2M, against the $10M equity floor.
+    expect(statusOf(candidate("equity", 5.51, 4e5))).toBe("FAIL");
+  });
+});
