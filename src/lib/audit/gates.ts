@@ -177,7 +177,11 @@ export function evaluateVolume(ctx: GateContext): GateResult {
 }
 
 export function evaluateTier(ctx: GateContext): GateResult {
-  const { maxTier, minAdv } = ctx.config.tierReject;
+  const { maxTier } = ctx.config.tierReject;
+  // Resolved to a scalar for this candidate's own market. Sealing the resolved number
+  // rather than the whole map keeps the evidence payload shape unchanged (still a plain
+  // number) and keeps each record bound to the floor that actually judged it.
+  const minAdv = ctx.config.tierReject.minAdv[ctx.candidate.market];
   const lookback = Math.min(20, ctx.bars.length);
   const slice = ctx.bars.slice(-lookback);
   // Volume units differ by market: Yahoo reports equity volume as a share count, but crypto
