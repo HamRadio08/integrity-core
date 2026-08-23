@@ -71,7 +71,17 @@ export const STACK_CONFIG: StackConfig = {
   },
 };
 
+// Order matches GATE_IDS — this array is both the funnel's display order and the shape
+// `buildFunnel` reports. Targets and bands are unchanged from the original design contract
+// (49 / 18 / 18 / 7 / 4); front-loading tier_reject did not require recalibrating them.
 export const ROLE_CONTRACTS: RoleContract[] = [
+  {
+    gateId: "tier_reject",
+    label: "tier_reject",
+    targetShare: 0.07,
+    band: [0.02, 0.12],
+    role: "Universe / quality screen, evaluated on every candidate before any indicator. Low is good: you are not wiping the book to trade it.",
+  },
   {
     gateId: "trend_sep",
     label: "trend_sep (EMA)",
@@ -94,13 +104,6 @@ export const ROLE_CONTRACTS: RoleContract[] = [
     role: "Participation. Quiet bars still fail even when price has a slope.",
   },
   {
-    gateId: "tier_reject",
-    label: "tier_reject",
-    targetShare: 0.07,
-    band: [0.02, 0.12],
-    role: "Universe / quality screen. Low is good: you are not wiping most of the book.",
-  },
-  {
     gateId: "accel_gate",
     label: "accel_gate",
     targetShare: 0.04,
@@ -110,10 +113,10 @@ export const ROLE_CONTRACTS: RoleContract[] = [
 ];
 
 export const TARGET_COUNTS: Record<GateId | "PASSED", number> = {
+  tier_reject: 13,
   trend_sep: 97,
   adx: 36,
   volume_confirm: 35,
-  tier_reject: 13,
   accel_gate: 8,
   PASSED: 11,
 };
