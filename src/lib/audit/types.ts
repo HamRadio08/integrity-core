@@ -1,8 +1,22 @@
+// Declared execution order of the sequential stack. This is the order the engine runs
+// (`gateOrder()` → `evaluateCandidate`) AND the order the `gate-order` invariant attests, so
+// editing this array changes what the desk certifies.
+//
+// tier_reject leads. Liquidity and universe eligibility are properties of the ASSET, not of
+// its current signal: they are knowable before any indicator is computed, and nothing
+// upstream feeds them. Sitting fourth, tier_reject was only reached by candidates that had
+// already cleared three signal gates — 8 of 117 on the committed tape, so 109 names (93%)
+// were never liquidity-checked at all, and five of the six thinnest names on the tape died
+// at trend_sep before the screen ever saw them (#7).
+//
+// Front-loading it is selection-neutral: the stack is a short-circuit AND-chain, so a
+// candidate passes iff it passes all five gates, whatever order they run in. What moves is
+// kill ATTRIBUTION, and with it the reach of the universe screen — 6.8% → 100% of the book.
 export const GATE_IDS = [
+  "tier_reject",
   "trend_sep",
   "adx",
   "volume_confirm",
-  "tier_reject",
   "accel_gate",
 ] as const;
 

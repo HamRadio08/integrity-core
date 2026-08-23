@@ -5,6 +5,7 @@ import { emaSeries } from "./indicators";
 import { canonicalize, digestOf, GENESIS, NonFiniteSealError } from "./hash";
 import { GATE_EVALUATORS, buildContext } from "./gates";
 import { buildLiveUniverse, evaluateLive, loadTape } from "./market";
+import { GATE_IDS } from "./types";
 import type { Bar, Candidate } from "./types";
 
 describe("degenerate input never produces a non-finite metric", () => {
@@ -51,7 +52,10 @@ describe("degenerate input never produces a non-finite metric", () => {
       expect(() => evaluateCandidate(candidate, STACK_CONFIG)).not.toThrow();
       const res = evaluateCandidate(candidate, STACK_CONFIG);
       expect(res.outcome).toBe("KILLED");
-      expect(res.killGate).toBe("trend_sep"); // first gate fails; the rest are SKIP
+      // A candidate with no history fails whichever gate runs first — asserted against the
+      // declared order rather than a hardcoded id, so a later reorder cannot quietly turn
+      // this regression test into a no-op.
+      expect(res.killGate).toBe(GATE_IDS[0]); // first gate fails; the rest are SKIP
     });
   }
 });
@@ -67,18 +71,20 @@ describe("live tape", () => {
     expect(tape.spot?.coinbase?.price ?? tape.spot?.gecko?.bitcoin?.usd).toBeGreaterThan(75_000);
   });
 
-  it("short-circuits on a real name that dies at the first gate", () => {
+  it("short-circuits on a real name that dies at trend_sep", () => {
     const universe = buildLiveUniverse(20260822);
     const tangled = universe.find((candidate) => evaluateCandidate(candidate).killGate === "trend_sep");
     expect(tangled).toBeTruthy();
     const result = evaluateCandidate(tangled!);
-    expect(result.evaluations.map((row) => row.status)).toEqual([
-      "FAIL",
-      "SKIP",
-      "SKIP",
-      "SKIP",
-      "SKIP",
-    ]);
+    // trend_sep is no longer the first gate, so the shape is "everything before it passed,
+    // it failed, everything after is SKIP" — stated relative to the declared order so this
+    // keeps testing short-circuit behaviour rather than one frozen position.
+    const killIndex = GATE_IDS.indexOf("trend_sep");
+    expect(result.evaluations.map((row) => row.status)).toEqual(
+      GATE_IDS.map((_, index) =>
+        index < killIndex ? "PASS" : index === killIndex ? "FAIL" : "SKIP",
+      ),
+    );
   });
 
   it("marks BTC to the live Coinbase/Gecko print before sealing", () => {

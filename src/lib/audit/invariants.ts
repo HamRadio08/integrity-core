@@ -265,11 +265,19 @@ export function verifyIntegrity(input: {
 
   const funnel = buildFunnel(input.records);
   const bandFails = funnel.filter((row) => !row.inBand);
+  // trend_sep is the coarse regime filter and must stay the dominant screen. It no longer
+  // runs first (tier_reject does), so this compares it against every OTHER gate rather than
+  // against "later" ones — position in the stack is irrelevant to the claim being made.
   const coarse = funnel.find((row) => row.gateId === "trend_sep");
-  const laterMax = Math.max(
+  const otherMax = Math.max(
     ...funnel.filter((row) => row.gateId !== "trend_sep").map((row) => row.count),
   );
-  const roleOrderOk = coarse ? coarse.count >= laterMax : false;
+  const roleOrderOk = coarse ? coarse.count >= otherMax : false;
+  // Live only since tier_reject was front-loaded. Fourth in the stack its reach was bounded
+  // by whatever survived three signal gates — 8 of 117 on the committed tape, a 6.8% ceiling
+  // — so `share > 0.15` was unreachable by construction and this check could never fire.
+  // Screening the whole book, tier_reject can now actually take the strategy over, and this
+  // is the tripwire that says so.
   const tier = funnel.find((row) => row.gateId === "tier_reject");
   const tierDominates = tier ? tier.share > 0.15 : false;
 
@@ -286,7 +294,7 @@ export function verifyIntegrity(input: {
             const contract = contractFor(row.gateId);
             return `${row.gateId} share ${(row.share * 100).toFixed(1)}% is outside ${(contract.band[0] * 100).toFixed(0)}–${(contract.band[1] * 100).toFixed(0)}%.`;
           }),
-          roleOrderOk ? null : "A later gate is killing more names than trend_sep — the stack is no longer coarse-to-fine.",
+          roleOrderOk ? null : "Another gate is killing more names than trend_sep — the coarse regime filter is no longer the dominant screen.",
           tierDominates ? "tier_reject is wiping the book. Universe screen has taken over the strategy." : null,
           inverted ? null : "Seal is intact; this is live-tape drift against the design contract, not a broken chain.",
         ]
