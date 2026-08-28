@@ -1,4 +1,4 @@
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 
 // Request-boundary guards for the /api/audit/* route handlers.
 //
@@ -60,6 +60,21 @@ export function tokenMatches(presented: string, expected: string): boolean {
   return timingSafeEqual(a, b);
 }
 
+// Per-process session token: handed to the dashboard by the server render and
+// echoed back as the x-audit-boot header on its API calls. Cross-site pages
+// cannot read it (needs same-origin script access), and non-browser callers
+// don't have it — so unlike fetch-metadata headers, it is not forgeable.
+// Stored on globalThis because in `next dev` the page bundle and the
+// route-handler bundles can hold separate instances of this module; globalThis
+// is per-process and therefore shared.
+const BOOT_TOKEN_KEY = "__stackAttestationBootToken";
+
+export function bootToken(): string {
+  const g = globalThis as unknown as Record<string, string | undefined>;
+  g[BOOT_TOKEN_KEY] ??= randomUUID();
+  return g[BOOT_TOKEN_KEY];
+}
+
 // Token buckets: capacity = burst, refillPerSecond = sustained rate.
 // refresh is tightest — every hit burns two outbound venue calls and a full
 // rebuild; tamper and verify each replay the whole run.
@@ -102,10 +117,19 @@ export function gateRequest(request: Request, endpoint: AuditEndpoint, nowMs = D
     return { ok: false, status: 403, error: "Cross-site requests are not allowed." };
   }
   const expectedToken = process.env.AUDIT_API_TOKEN?.trim();
-  if (expectedToken && verdict === "unproven") {
+  if (expectedToken) {
+    // Fetch-metadata and Origin headers are freely forgeable by non-browser
+    // clients, so when a token is configured they are NOT credentials: every
+    // caller must present either the configured bearer token or the boot
+    // token the dashboard embeds from the server render. (The cross-site
+    // check above still hard-blocks real browsers on hostile pages.)
     const auth = request.headers.get("authorization") ?? "";
     const presented = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
-    if (!presented || !tokenMatches(presented, expectedToken)) {
+    const boot = request.headers.get("x-audit-boot") ?? "";
+    const authorized =
+      (presented !== "" && tokenMatches(presented, expectedToken)) ||
+      (boot !== "" && tokenMatches(boot, bootToken()));
+    if (!authorized) {
       return {
         ok: false,
         status: 403,

@@ -45,9 +45,11 @@ Two optional env flags:
 - `AUDIT_TAMPER_ENABLED` — the tamper lab (UI tab + `/api/audit/tamper`) runs only in
   development by default. Set `1`/`true` to force it on (e.g. a demo deployment) or
   `0`/`false` to force it off.
-- `AUDIT_API_TOKEN` — when set, non-browser callers (curl, scripts) must send
-  `Authorization: Bearer <token>` on the audit POST endpoints. Browser same-origin
-  calls from the desk itself are unaffected.
+- `AUDIT_API_TOKEN` — when set, every audit POST requires credentials: scripted
+  callers send `Authorization: Bearer <token>`, and the desk's own browser calls
+  authenticate automatically via a per-process session token embedded at render.
+  Same-origin request headers alone are never treated as credentials — they are
+  forgeable by anything that is not a browser.
 
 ## Forensic guarantees
 

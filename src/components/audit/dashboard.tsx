@@ -54,9 +54,11 @@ const GATE_COLORS: Record<GateId, string> = {
 export function Dashboard({
   initial,
   tamperEnabled = false,
+  bootToken,
 }: {
   initial: AuditRun;
   tamperEnabled?: boolean;
+  bootToken?: string;
 }) {
   const [run, setRun] = useState(initial);
   const [query, setQuery] = useState("");
@@ -77,7 +79,12 @@ export function Dashboard({
   }, [run.records, market, query]);
 
   async function loadRun(path: string, init?: RequestInit) {
-    const response = await fetch(path, init);
+    // The boot token is the desk's own credential when AUDIT_API_TOKEN is set;
+    // headers otherwise pass through untouched (scan deliberately sends no
+    // Content-Type, and that must stay true).
+    const headers = new Headers(init?.headers);
+    if (bootToken) headers.set("x-audit-boot", bootToken);
+    const response = await fetch(path, { ...init, headers });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error ?? "Request failed.");
     return payload;

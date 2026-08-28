@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  bootToken,
   consumeRateLimit,
   isTamperEnabled,
   originVerdict,
@@ -181,6 +182,47 @@ describe("POST /api/audit/verify", () => {
     expect(response.status).toBe(400);
   });
 
+  it("rejects an evaluation without evidence.metrics instead of crashing to 500", async () => {
+    // finiteMetrics dereferences evaluation.evidence.metrics unconditionally —
+    // this exact payload used to escape validation and TypeError inside
+    // verifyIntegrity.
+    const response = await verifyPost(
+      jsonPost("/api/audit/verify", {
+        run: {
+          records: [{ evaluations: [{ gateId: "tier_reject", order: 0, status: "PASS" }] }],
+          config: {},
+        },
+      }),
+    );
+    expect(response.status).toBe(400);
+    const payload = await response.json();
+    expect(payload.error).toContain("evidence.metrics");
+  });
+
+  it("rejects an oversized chunked body without buffering it whole", async () => {
+    // No Content-Length header: a ReadableStream body exercises the capped
+    // incremental reader, which must 413 as soon as the cap is crossed.
+    const chunk = new Uint8Array(1024 * 1024);
+    let sent = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (sent > VERIFY_MAX_BYTES) {
+          controller.close();
+          return;
+        }
+        sent += chunk.byteLength;
+        controller.enqueue(chunk);
+      },
+    });
+    const request = new Request("http://127.0.0.1:43173/api/audit/verify", {
+      method: "POST",
+      body: stream,
+      duplex: "half",
+    } as RequestInit & { duplex: "half" });
+    const response = await verifyPost(request);
+    expect(response.status).toBe(413);
+  });
+
   it("verifies the genuine sealed run end to end", async () => {
     const bundle = getDemoBundle();
     const response = await verifyPost(
@@ -212,14 +254,28 @@ describe("POST /api/audit/scan", () => {
     expect(payload.seed).toBe(DEMO_SEED);
   });
 
-  it("demands the bearer token from non-browser callers when configured", async () => {
+  it("demands credentials from every caller when a token is configured", async () => {
     vi.stubEnv("AUDIT_API_TOKEN", "sekret");
     const denied = await scanPost(jsonPost("/api/audit/scan", { seed: DEMO_SEED }));
     expect(denied.status).toBe(403);
-    const allowed = await scanPost(
+    // Forged fetch-metadata headers are NOT credentials — curl can send them.
+    const forged = await scanPost(
+      jsonPost("/api/audit/scan", { seed: DEMO_SEED }, { "sec-fetch-site": "same-origin" }),
+    );
+    expect(forged.status).toBe(403);
+    const bearer = await scanPost(
       jsonPost("/api/audit/scan", { seed: DEMO_SEED }, { authorization: "Bearer sekret" }),
     );
-    expect(allowed.status).toBe(200);
+    expect(bearer.status).toBe(200);
+    // The dashboard authenticates with the render-embedded boot token.
+    const viaBoot = await scanPost(
+      jsonPost(
+        "/api/audit/scan",
+        { seed: DEMO_SEED },
+        { "sec-fetch-site": "same-origin", "x-audit-boot": bootToken() },
+      ),
+    );
+    expect(viaBoot.status).toBe(200);
   });
 
   it("returns 429 once the endpoint budget is exhausted", async () => {

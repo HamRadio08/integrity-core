@@ -65,8 +65,21 @@ export function validateVerifyPayload(body: unknown): PayloadVerdict {
     if (!Array.isArray(record.evaluations)) {
       return { ok: false, error: `run.records[${index}].evaluations must be an array.` };
     }
-    if (record.evaluations.some((evaluation: unknown) => !isPlainObject(evaluation))) {
-      return { ok: false, error: `run.records[${index}].evaluations contains a non-object entry.` };
+    for (let j = 0; j < record.evaluations.length; j += 1) {
+      const evaluation: unknown = record.evaluations[j];
+      if (!isPlainObject(evaluation)) {
+        return { ok: false, error: `run.records[${index}].evaluations[${j}] is not an object.` };
+      }
+      // finiteMetrics dereferences evaluation.evidence.metrics unconditionally
+      // (invariants.ts) — a missing/non-object evidence or metrics crashes
+      // verifyIntegrity with an uncaught TypeError, exactly the class this
+      // validator exists to stop at the boundary.
+      if (!isPlainObject(evaluation.evidence) || !isPlainObject(evaluation.evidence.metrics)) {
+        return {
+          ok: false,
+          error: `run.records[${index}].evaluations[${j}].evidence.metrics must be an object.`,
+        };
+      }
     }
     if (record.metrics !== undefined && !isPlainObject(record.metrics)) {
       return { ok: false, error: `run.records[${index}].metrics must be an object when present.` };
