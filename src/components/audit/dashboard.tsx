@@ -51,7 +51,13 @@ const GATE_COLORS: Record<GateId, string> = {
   accel_gate: "bg-emerald-400",
 };
 
-export function Dashboard({ initial }: { initial: AuditRun }) {
+export function Dashboard({
+  initial,
+  tamperEnabled = false,
+}: {
+  initial: AuditRun;
+  tamperEnabled?: boolean;
+}) {
   const [run, setRun] = useState(initial);
   const [query, setQuery] = useState("");
   const [market, setMarket] = useState<"all" | "crypto" | "equity">("all");
@@ -261,7 +267,7 @@ export function Dashboard({ initial }: { initial: AuditRun }) {
           <TabsList variant="line" className="w-full justify-start overflow-x-auto">
             <TabsTrigger value="ledger">Ledger</TabsTrigger>
             <TabsTrigger value="integrity">Integrity</TabsTrigger>
-            <TabsTrigger value="tamper">Tamper lab</TabsTrigger>
+            {tamperEnabled ? <TabsTrigger value="tamper">Tamper lab</TabsTrigger> : null}
           </TabsList>
 
           <TabsContent value="ledger" className="space-y-4 pt-4">
@@ -365,6 +371,7 @@ export function Dashboard({ initial }: { initial: AuditRun }) {
             </div>
           </TabsContent>
 
+          {tamperEnabled ? (
           <TabsContent value="tamper" className="space-y-4 pt-4">
             <Card>
               <CardHeader>
@@ -406,6 +413,7 @@ export function Dashboard({ initial }: { initial: AuditRun }) {
               </div>
             )}
           </TabsContent>
+          ) : null}
         </Tabs>
       </main>
 
