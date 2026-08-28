@@ -33,6 +33,24 @@ npm run dev       # http://127.0.0.1:43173
 
 `Mark to market` on the desk pulls a fresh Coinbase/Gecko spot and reseals. It does not fabricate bars.
 
+## API hardening
+
+The `/api/audit/*` routes carry request-boundary guards (`src/lib/audit/guard.ts`):
+cross-site browser requests are rejected via `Sec-Fetch-Site`/`Origin` checks, each
+endpoint has a process-wide rate budget, and `/api/audit/verify` enforces an 8 MB
+payload cap plus structural validation before anything reaches `verifyIntegrity`.
+
+Two optional env flags:
+
+- `AUDIT_TAMPER_ENABLED` — the tamper lab (UI tab + `/api/audit/tamper`) runs only in
+  development by default. Set `1`/`true` to force it on (e.g. a demo deployment) or
+  `0`/`false` to force it off.
+- `AUDIT_API_TOKEN` — when set, every audit POST requires credentials: scripted
+  callers send `Authorization: Bearer <token>`, and the desk's own browser calls
+  authenticate automatically via a per-process session token embedded at render.
+  Same-origin request headers alone are never treated as credentials — they are
+  forgeable by anything that is not a browser.
+
 ## Forensic guarantees
 
 - Hash-chained records; each gate evaluation has its own digest

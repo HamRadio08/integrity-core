@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { gateRequest, isTamperEnabled } from "@/lib/audit/guard";
 import { getActiveBundle } from "@/lib/audit/run";
 import { verifyIntegrity } from "@/lib/audit/invariants";
 import type { CandidateRecord, GateId } from "@/lib/audit/types";
@@ -9,7 +10,17 @@ function overwriteKill(record: CandidateRecord): CandidateRecord {
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as { candidateId?: string; mode?: string };
+  // The tamper lab verifies poisoned copies — it never writes the book — but
+  // each call replays the full run, so it stays a demo surface: off in
+  // production unless AUDIT_TAMPER_ENABLED opts it in.
+  if (!isTamperEnabled()) {
+    return NextResponse.json({ error: "Tamper lab is disabled on this deployment." }, { status: 403 });
+  }
+  const gate = gateRequest(request, "tamper");
+  if (!gate.ok) {
+    return NextResponse.json({ error: gate.error }, { status: gate.status });
+  }
+  const body = (await request.json().catch(() => ({}))) as { candidateId?: string; mode?: string };
   const bundle = getActiveBundle();
   const target =
     bundle.records.find((record) => record.candidateId === body.candidateId) ??

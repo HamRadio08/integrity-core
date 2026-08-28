@@ -51,7 +51,15 @@ const GATE_COLORS: Record<GateId, string> = {
   accel_gate: "bg-emerald-400",
 };
 
-export function Dashboard({ initial }: { initial: AuditRun }) {
+export function Dashboard({
+  initial,
+  tamperEnabled = false,
+  bootToken,
+}: {
+  initial: AuditRun;
+  tamperEnabled?: boolean;
+  bootToken?: string;
+}) {
   const [run, setRun] = useState(initial);
   const [query, setQuery] = useState("");
   const [market, setMarket] = useState<"all" | "crypto" | "equity">("all");
@@ -71,7 +79,12 @@ export function Dashboard({ initial }: { initial: AuditRun }) {
   }, [run.records, market, query]);
 
   async function loadRun(path: string, init?: RequestInit) {
-    const response = await fetch(path, init);
+    // The boot token is the desk's own credential when AUDIT_API_TOKEN is set;
+    // headers otherwise pass through untouched (scan deliberately sends no
+    // Content-Type, and that must stay true).
+    const headers = new Headers(init?.headers);
+    if (bootToken) headers.set("x-audit-boot", bootToken);
+    const response = await fetch(path, { ...init, headers });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.error ?? "Request failed.");
     return payload;
@@ -261,7 +274,7 @@ export function Dashboard({ initial }: { initial: AuditRun }) {
           <TabsList variant="line" className="w-full justify-start overflow-x-auto">
             <TabsTrigger value="ledger">Ledger</TabsTrigger>
             <TabsTrigger value="integrity">Integrity</TabsTrigger>
-            <TabsTrigger value="tamper">Tamper lab</TabsTrigger>
+            {tamperEnabled ? <TabsTrigger value="tamper">Tamper lab</TabsTrigger> : null}
           </TabsList>
 
           <TabsContent value="ledger" className="space-y-4 pt-4">
@@ -365,6 +378,7 @@ export function Dashboard({ initial }: { initial: AuditRun }) {
             </div>
           </TabsContent>
 
+          {tamperEnabled ? (
           <TabsContent value="tamper" className="space-y-4 pt-4">
             <Card>
               <CardHeader>
@@ -406,6 +420,7 @@ export function Dashboard({ initial }: { initial: AuditRun }) {
               </div>
             )}
           </TabsContent>
+          ) : null}
         </Tabs>
       </main>
 

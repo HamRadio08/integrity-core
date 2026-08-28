@@ -43,11 +43,12 @@ jobs:
       # (HamRadio08/ai-trading-agents) on every one of its workflows.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
-      # TODO(harden): pin to a digest like the checkout above. Left as a tag deliberately
-      # rather than inventing a hash that was never verified against the upstream repo.
+      # SHA-pinned (2026-08-28): digest verified against the upstream repo via
+      # `git ls-remote --tags https://github.com/actions/setup-node` — v5 and v5.0.0
+      # are lightweight tags on this commit, so the tag hash IS the commit hash.
       # v5, not v4: v4 targets Node 20, which the runner now force-migrates to Node 24
       # with a deprecation warning on every run.
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
           cache: npm

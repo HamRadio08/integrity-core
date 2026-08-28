@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
+import { gateRequest } from "@/lib/audit/guard";
 import { DEMO_SEED, publicRun, replaceActiveBundle } from "@/lib/audit/run";
 import { setSpotOverlay } from "@/lib/audit/market";
 
-export async function POST() {
+export async function POST(request: Request) {
+  const gate = gateRequest(request, "refresh");
+  if (!gate.ok) {
+    return NextResponse.json({ error: gate.error }, { status: gate.status });
+  }
   try {
     const [geckoRes, coinbaseRes] = await Promise.all([
       fetch(
