@@ -200,6 +200,59 @@ export interface FeaturedCase {
   pump: PumpWindow;
 }
 
+export type StrategyBucketId = GateId | "PASSED" | "BOOK";
+
+export interface PnlBucket {
+  id: StrategyBucketId;
+  label: string;
+  count: number;
+  share: number;
+  meanChg5d: number | null;
+  medianChg5d: number | null;
+  meanChg20d: number | null;
+  breadth5d: number | null;
+  sample5d: number;
+}
+
+export interface MemeRung {
+  rank: number;
+  candidateId: string;
+  symbol: string;
+  name: string;
+  last: number;
+  chg5d: number | null;
+  chg20d: number | null;
+  outcome: Outcome;
+  killGate: GateId | null;
+  reason: string | null;
+}
+
+export type FreshnessSeverity = "ok" | "watch" | "fail";
+
+export interface Freshness {
+  tapeFetchedAt: string;
+  tapeAgeMs: number;
+  spotTime: string | null;
+  source: string;
+  severity: FreshnessSeverity;
+  detail: string;
+}
+
+export interface ContractWatch {
+  id: string;
+  title: string;
+  severity: CheckSeverity;
+  detail: string;
+  gateId?: GateId;
+}
+
+export interface DeskSnapshot {
+  freshness: Freshness;
+  pnlByStrategy: PnlBucket[];
+  memeLadder: MemeRung[];
+  watches: ContractWatch[];
+}
+
 export interface AuditRun {
   runId: string;
   protocol: "stack-attestation/v1";
@@ -218,6 +271,7 @@ export interface AuditRun {
   funnel: FunnelRow[];
   records: CandidateRecord[];
   integrity: IntegrityReport;
+  desk: DeskSnapshot;
 }
 
 export interface AuditBundle extends AuditRun {

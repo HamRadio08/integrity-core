@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -32,7 +32,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { formatNumber, formatPct, formatShare, shortHash } from "@/lib/audit/format";
+import { FuturesPanel, MemeLadderPanel, PnlPanel, WatchLanesPanel } from "@/components/audit/desk-panels";
+import { formatAge, formatNumber, formatPct, formatShare, shortHash } from "@/lib/audit/format";
+import type { LiveDesk } from "@/lib/audit/live";
 import type {
   AuditRun,
   Bar,
@@ -40,6 +42,7 @@ import type {
   GateEvaluation,
   GateId,
   IntegrityReport,
+  StrategyBucketId,
 } from "@/lib/audit/types";
 import { cn } from "@/lib/utils";
 
@@ -53,30 +56,43 @@ const GATE_COLORS: Record<GateId, string> = {
 
 export function Dashboard({
   initial,
+  initialLive = null,
   tamperEnabled = false,
   bootToken,
 }: {
   initial: AuditRun;
+  initialLive?: LiveDesk | null;
   tamperEnabled?: boolean;
   bootToken?: string;
 }) {
   const [run, setRun] = useState(initial);
   const [query, setQuery] = useState("");
   const [market, setMarket] = useState<"all" | "crypto" | "equity">("all");
+  const [killFilter, setKillFilter] = useState<StrategyBucketId | "all">("all");
+  const [sectorFilter, setSectorFilter] = useState<"all" | "Meme">("all");
+  const [tab, setTab] = useState("ledger");
   const [busy, setBusy] = useState<"refresh" | "reshuffle" | "tamper" | null>(null);
+  const [liveBusy, setLiveBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [tamper, setTamper] = useState<IntegrityReport | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [detail, setDetail] = useState<{ record: CandidateRecord; bars: Bar[] } | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [live, setLive] = useState<LiveDesk | null>(initialLive);
 
   const filtered = useMemo(() => {
     return run.records.filter((record) => {
       if (market !== "all" && record.market !== market) return false;
+      if (sectorFilter !== "all" && record.sector !== sectorFilter) return false;
+      if (killFilter === "PASSED" && record.outcome !== "PASSED") return false;
+      if (killFilter !== "all" && killFilter !== "BOOK" && killFilter !== "PASSED" && record.killGate !== killFilter) {
+        return false;
+      }
       const hay = `${record.symbol} ${record.name} ${record.sector} ${record.killGate ?? "passed"}`.toLowerCase();
       return hay.includes(query.trim().toLowerCase());
     });
-  }, [run.records, market, query]);
+  }, [run.records, market, query, killFilter, sectorFilter]);
 
   async function loadRun(path: string, init?: RequestInit) {
     // The boot token is the desk's own credential when AUDIT_API_TOKEN is set;
@@ -90,12 +106,42 @@ export function Dashboard({
     return payload;
   }
 
+  async function refreshLive() {
+    setLiveBusy(true);
+    try {
+      const payload = (await loadRun("/api/audit/live")) as LiveDesk;
+      setLive(payload);
+      if (payload.errors.length) {
+        setError(payload.errors.join(" "));
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Live lanes failed.");
+    } finally {
+      setLiveBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void refreshLive();
+    }, 45_000);
+    return () => window.clearInterval(timer);
+    // Heartbeat only. The first live payload is rendered from the server.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bootToken]);
+
   async function refreshTape() {
     setBusy("refresh");
     setError(null);
     try {
-      setRun(await loadRun("/api/audit/refresh", { method: "POST" }));
+      const next = (await loadRun("/api/audit/refresh", { method: "POST" })) as AuditRun;
+      setRun(next);
       setTamper(null);
+      const spot = next.tape.spotBtc;
+      setNotice(
+        `Marked to market. BTC sealed last ${spot == null ? "—" : `$${formatNumber(spot, 0)}`} at ${next.tape.spotTime ?? next.tape.fetchedAt}. Chain ${shortHash(next.chainHead)}.`,
+      );
+      await refreshLive();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Refresh failed.");
     } finally {
@@ -107,12 +153,48 @@ export function Dashboard({
     setBusy("reshuffle");
     setError(null);
     try {
-      setRun(await loadRun("/api/audit/scan", { method: "POST", body: JSON.stringify({ seed: run.seed }) }));
+      const next = (await loadRun("/api/audit/scan", {
+        method: "POST",
+        body: JSON.stringify({ seed: run.seed }),
+      })) as AuditRun;
+      setRun(next);
+      setNotice(
+        `Resealed ${next.candidateCount} names from the same tape and seed. Chain ${shortHash(next.chainHead)}. Same book is the proof the seal is deterministic.`,
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Reseal failed.");
     } finally {
       setBusy(null);
     }
+  }
+
+  function showBucket(id: StrategyBucketId) {
+    setKillFilter(id === "BOOK" ? "all" : id);
+    setSectorFilter("all");
+    setMarket("all");
+    setQuery("");
+    setTab("ledger");
+    setNotice(
+      id === "BOOK"
+        ? "Ledger showing the whole sealed book."
+        : `Ledger filtered to ${id === "PASSED" ? "names that cleared the stack" : `${id} kills`}.`,
+    );
+  }
+
+  function showMemeLedger() {
+    setSectorFilter("Meme");
+    setMarket("crypto");
+    setKillFilter("all");
+    setQuery("");
+    setTab("ledger");
+    setNotice("Ledger filtered to sealed meme-sector names.");
+  }
+
+  function clearFilters() {
+    setQuery("");
+    setMarket("all");
+    setKillFilter("all");
+    setSectorFilter("all");
   }
 
   async function injectTamper(mode: "kill-reason" | "bars") {
@@ -125,6 +207,7 @@ export function Dashboard({
         body: JSON.stringify({ mode }),
       });
       setTamper(payload.report);
+      setNotice(`Tamper lab injected ${mode}. The live book was not written; only the replay of the poisoned copy changed.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Tamper lab failed.");
     } finally {
@@ -171,11 +254,15 @@ export function Dashboard({
               )}
               {integrityOk ? "Attested" : "Contaminated"}
             </Badge>
-            <Button variant="outline" size="sm" onClick={reshuffle} disabled={busy !== null}>
+            <Button type="button" variant="outline" size="sm" onClick={() => void refreshLive()} disabled={liveBusy}>
+              {liveBusy ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}
+              Refresh live lanes
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={() => void reshuffle()} disabled={busy !== null}>
               {busy === "reshuffle" ? <LoaderCircle className="animate-spin" /> : <Shield />}
               Reseal book
             </Button>
-            <Button size="sm" onClick={refreshTape} disabled={busy !== null}>
+            <Button type="button" size="sm" onClick={() => void refreshTape()} disabled={busy !== null}>
               {busy === "refresh" ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}
               Mark to market
             </Button>
@@ -192,14 +279,65 @@ export function Dashboard({
           </Alert>
         ) : null}
 
+        {notice ? (
+          <Alert>
+            <CheckCircle2 />
+            <AlertTitle>Action completed</AlertTitle>
+            <AlertDescription className="flex flex-wrap items-center gap-2">
+              <span>{notice}</span>
+              <Button type="button" size="xs" variant="ghost" onClick={() => setNotice(null)}>
+                Dismiss
+              </Button>
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
+        {run.desk.freshness.severity !== "ok" ? (
+          <Alert variant={run.desk.freshness.severity === "fail" ? "destructive" : "default"}>
+            <AlertTriangle />
+            <AlertTitle>
+              {run.desk.freshness.severity === "fail" ? "Tape is stale" : "Tape is aging"}
+            </AlertTitle>
+            <AlertDescription className="flex flex-wrap items-center gap-2">
+              <span>{run.desk.freshness.detail}</span>
+              <Button
+                type="button"
+                size="sm"
+                variant={run.desk.freshness.severity === "fail" ? "destructive" : "outline"}
+                onClick={() => void refreshTape()}
+                disabled={busy !== null}
+              >
+                Mark to market
+              </Button>
+            </AlertDescription>
+          </Alert>
+        ) : null}
+
         {pump ? <PumpCard run={run} onInspect={() => openCandidate("C-BTC-1D")} /> : null}
 
-        <section className="grid gap-4 md:grid-cols-4">
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <Stat label="Names on tape" value={String(run.candidateCount)} hint={`${run.killedCount} killed · ${run.passedCount} cleared`} />
           <Stat
             label="BTC spot"
-            value={pump ? `$${formatNumber(pump.last, 0)}` : "—"}
-            hint={run.tape.spotTime ? `Coinbase ${run.tape.spotTime.slice(11, 19)} UTC` : run.tape.source}
+            value={
+              live?.spots.find((row) => row.symbol === "BTC")
+                ? `$${formatNumber(live.spots.find((row) => row.symbol === "BTC")!.usd, 0)}`
+                : pump
+                  ? `$${formatNumber(pump.last, 0)}`
+                  : "—"
+            }
+            hint={
+              live?.spots.find((row) => row.symbol === "BTC")
+                ? `Live Coinbase · sealed ${pump ? `$${formatNumber(pump.last, 0)}` : "—"}`
+                : run.tape.spotTime
+                  ? `Sealed Coinbase ${run.tape.spotTime.slice(11, 19)} UTC`
+                  : run.tape.source
+            }
+          />
+          <Stat
+            label="Tape age"
+            value={formatAge(run.desk.freshness.tapeAgeMs)}
+            hint={`${run.desk.freshness.severity} · ${run.tape.source}`}
           />
           <Stat
             label="Chain head"
@@ -270,9 +408,13 @@ export function Dashboard({
           </CardContent>
         </Card>
 
-        <Tabs defaultValue="ledger">
+        <Tabs value={tab} onValueChange={(value) => setTab(String(value))}>
           <TabsList variant="line" className="w-full justify-start overflow-x-auto">
             <TabsTrigger value="ledger">Ledger</TabsTrigger>
+            <TabsTrigger value="pnl">PnL by strategy</TabsTrigger>
+            <TabsTrigger value="futures">Futures</TabsTrigger>
+            <TabsTrigger value="watch">CI / watch lanes</TabsTrigger>
+            <TabsTrigger value="meme">Meme ladder</TabsTrigger>
             <TabsTrigger value="integrity">Integrity</TabsTrigger>
             {tamperEnabled ? <TabsTrigger value="tamper">Tamper lab</TabsTrigger> : null}
           </TabsList>
@@ -285,10 +427,11 @@ export function Dashboard({
                 placeholder="Filter symbol, sector, or kill gate"
                 className="sm:max-w-sm"
               />
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 {(["all", "crypto", "equity"] as const).map((value) => (
                   <Button
                     key={value}
+                    type="button"
                     size="sm"
                     variant={market === value ? "default" : "outline"}
                     onClick={() => setMarket(value)}
@@ -296,11 +439,18 @@ export function Dashboard({
                     {value}
                   </Button>
                 ))}
+                {(query || market !== "all" || killFilter !== "all" || sectorFilter !== "all") ? (
+                  <Button type="button" size="sm" variant="ghost" onClick={clearFilters}>
+                    Clear filters
+                  </Button>
+                ) : null}
               </div>
               <p className="text-xs text-muted-foreground sm:ml-auto">
                 {filtered.length === 0
                   ? "No names match this filter."
                   : `${filtered.length} sealed records`}
+                {killFilter !== "all" ? ` · ${killFilter}` : ""}
+                {sectorFilter !== "all" ? ` · ${sectorFilter}` : ""}
               </p>
             </div>
             {filtered.length === 0 ? (
@@ -317,17 +467,14 @@ export function Dashboard({
                       <TableHead className="text-right">5d</TableHead>
                       <TableHead>Kill</TableHead>
                       <TableHead className="hidden md:table-cell">First-fail evidence</TableHead>
+                      <TableHead className="text-right">Open</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filtered.map((record) => {
                       const fail = record.evaluations.find((row) => row.status === "FAIL");
                       return (
-                        <TableRow
-                          key={record.candidateId}
-                          className="cursor-pointer"
-                          onClick={() => openCandidate(record.candidateId)}
-                        >
+                        <TableRow key={record.candidateId}>
                           <TableCell>
                             <div className="font-medium">{record.symbol}</div>
                             <div className="text-xs text-muted-foreground">
@@ -348,6 +495,16 @@ export function Dashboard({
                           <TableCell className="hidden max-w-md truncate text-muted-foreground md:table-cell">
                             {fail?.evidence.reason ?? "Cleared all five gates."}
                           </TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void openCandidate(record.candidateId)}
+                            >
+                              Inspect
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       );
                     })}
@@ -355,6 +512,44 @@ export function Dashboard({
                 </Table>
               </Card>
             )}
+          </TabsContent>
+
+          <TabsContent value="pnl" className="pt-4">
+            <PnlPanel buckets={run.desk.pnlByStrategy} onInspectBucket={showBucket} />
+          </TabsContent>
+
+          <TabsContent value="futures" className="pt-4">
+            <FuturesPanel
+              futures={live?.futures ?? null}
+              fetchedAt={live?.fetchedAt ?? null}
+              onRefresh={() => void refreshLive()}
+              busy={liveBusy}
+            />
+          </TabsContent>
+
+          <TabsContent value="watch" className="pt-4">
+            <WatchLanesPanel
+              watches={run.desk.watches}
+              ci={{
+                runs: live?.ci.runs ?? [],
+                latest: live?.ci.latest ?? null,
+                error: live?.ci.error ?? null,
+                fetchedAt: live?.fetchedAt ?? null,
+              }}
+              onFilterGate={(gateId) => showBucket(gateId)}
+              onRefreshLive={() => void refreshLive()}
+              onMarkToMarket={() => void refreshTape()}
+              busy={busy !== null || liveBusy}
+            />
+          </TabsContent>
+
+          <TabsContent value="meme" className="pt-4">
+            <MemeLadderPanel
+              rungs={run.desk.memeLadder}
+              spots={live?.spots ?? []}
+              onInspect={(id) => void openCandidate(id)}
+              onShowInLedger={showMemeLedger}
+            />
           </TabsContent>
 
           <TabsContent value="integrity" className="pt-4">
@@ -389,13 +584,13 @@ export function Dashboard({
                 </CardDescription>
               </CardHeader>
               <CardContent className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={() => injectTamper("kill-reason")} disabled={busy !== null}>
+                <Button type="button" variant="outline" onClick={() => void injectTamper("kill-reason")} disabled={busy !== null}>
                   Overwrite a kill reason
                 </Button>
-                <Button variant="outline" onClick={() => injectTamper("bars")} disabled={busy !== null}>
+                <Button type="button" variant="outline" onClick={() => void injectTamper("bars")} disabled={busy !== null}>
                   Mutate a last close
                 </Button>
-                <Button variant="ghost" onClick={() => setTamper(null)}>
+                <Button type="button" variant="ghost" onClick={() => setTamper(null)}>
                   Clear
                 </Button>
               </CardContent>
@@ -493,7 +688,7 @@ function PumpCard({ run, onInspect }: { run: AuditRun; onInspect: () => void }) 
               bar, not a cartoon series.
             </CardDescription>
           </div>
-          <Button variant="outline" onClick={onInspect}>
+          <Button type="button" variant="outline" onClick={onInspect}>
             <Activity />
             Open BTC seal
           </Button>
