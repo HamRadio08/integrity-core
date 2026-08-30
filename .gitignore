@@ -36,6 +36,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# paper ledger is runtime state, not a sealed artifact
+/data/paper-book.json
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

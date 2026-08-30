@@ -15,12 +15,210 @@ import {
 import { formatNumber, formatPct } from "@/lib/audit/format";
 import type { CiRun, FutureQuote, LiveSpot } from "@/lib/audit/live";
 import type { ContractWatch, GateId, MemeRung, PnlBucket, StrategyBucketId } from "@/lib/audit/types";
+import type { PaperBook } from "@/lib/paper";
 import { cn } from "@/lib/utils";
 
 function signedPct(value: number | null, digits = 2): string {
   if (value == null || !Number.isFinite(value)) return "—";
   const formatted = formatPct(value, digits);
   return value > 0 ? `+${formatted}` : formatted;
+}
+
+function paperMoney(value: number, sign = false): string {
+  const formatted = Math.abs(value).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  if (value < 0) return `-$${formatted}`;
+  if (sign && value > 0) return `+$${formatted}`;
+  return `$${formatted}`;
+}
+
+function signedUsd(value: number): string {
+  return paperMoney(value, true);
+}
+
+export function PaperBookPanel({
+  book,
+  onTick,
+  onInspect,
+  busy,
+}: {
+  book: PaperBook | null;
+  onTick: () => void;
+  onInspect: (symbol: string) => void;
+  busy: boolean;
+}) {
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader className="border-b">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <CardTitle>Paper book</CardTitle>
+              <CardDescription>
+                AI agents are long names that cleared the sealed stack. Fills are paper-only
+                — no venue order is sent. Sitting flat is a measured empty book, not a made-up
+                position.
+              </CardDescription>
+            </div>
+            <Button type="button" variant="outline" size="sm" onClick={onTick} disabled={busy}>
+              {busy ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}
+              Tick paper agents
+            </Button>
+          </div>
+          {book ? (
+            <p className="font-mono text-[11px] text-muted-foreground">
+              mode {book.mode} · venue {book.venue} · last tick {book.updatedAt}
+            </p>
+          ) : null}
+        </CardHeader>
+        <CardContent className="pt-4">
+          {!book ? (
+            <p className="text-sm text-muted-foreground">Paper book has not ticked yet.</p>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <div className="text-xs text-muted-foreground">Paper equity</div>
+                <div className="font-mono text-lg">{paperMoney(book.equity)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Cash</div>
+                <div className="font-mono text-lg">{paperMoney(book.cash)}</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Unrealized</div>
+                <div
+                  className={cn(
+                    "font-mono text-lg",
+                    book.unrealized > 0 && "text-emerald-400",
+                    book.unrealized < 0 && "text-rose-400",
+                  )}
+                >
+                  {signedUsd(book.unrealized)}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground">Open names</div>
+                <div className="font-mono text-lg">{book.openPositions}</div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {book?.agents.map((agent) => (
+        <Card key={agent.id}>
+          <CardHeader className="border-b">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <CardTitle>{agent.label}</CardTitle>
+                <CardDescription>{agent.mandate}</CardDescription>
+              </div>
+              <Badge variant={agent.status === "active" ? "secondary" : "outline"}>{agent.status}</Badge>
+            </div>
+            <p className="text-sm text-muted-foreground">{agent.lastReason}</p>
+          </CardHeader>
+          <CardContent className="space-y-3 pt-4">
+            <div className="flex flex-wrap gap-4 font-mono text-xs text-muted-foreground">
+              <span>equity {paperMoney(agent.equity)}</span>
+              <span>cash {paperMoney(agent.cash)}</span>
+              <span>realized {signedUsd(agent.realized)}</span>
+              <span>unrealized {signedUsd(agent.unrealized)}</span>
+            </div>
+            {agent.positions.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Flat. No paper names on this mandate.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead className="text-right">Qty</TableHead>
+                    <TableHead className="text-right">Avg</TableHead>
+                    <TableHead className="text-right">Last</TableHead>
+                    <TableHead className="text-right">Value</TableHead>
+                    <TableHead className="text-right">P&amp;L</TableHead>
+                    <TableHead className="text-right">Open</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {agent.positions.map((position) => (
+                    <TableRow key={`${agent.id}-${position.symbol}`}>
+                      <TableCell>
+                        <div className="font-medium">{position.symbol}</div>
+                        <div className="text-xs text-muted-foreground">{position.name}</div>
+                      </TableCell>
+                      <TableCell className="text-right font-mono">{formatNumber(position.qty, 4)}</TableCell>
+                      <TableCell className="text-right font-mono">{formatNumber(position.avgPrice, 4)}</TableCell>
+                      <TableCell className="text-right font-mono">{formatNumber(position.last, 4)}</TableCell>
+                      <TableCell className="text-right font-mono">{paperMoney(position.marketValue)}</TableCell>
+                      <TableCell
+                        className={cn(
+                          "text-right font-mono",
+                          position.unrealized > 0 && "text-emerald-400",
+                          position.unrealized < 0 && "text-rose-400",
+                        )}
+                      >
+                        {signedUsd(position.unrealized)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button type="button" size="sm" variant="outline" onClick={() => onInspect(position.symbol)}>
+                          Ledger
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      ))}
+
+      {book && book.fills.length > 0 ? (
+        <Card>
+          <CardHeader className="border-b">
+            <CardTitle>Recent paper fills</CardTitle>
+            <CardDescription>Newest first. Every fill is venue=paper.</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>When</TableHead>
+                  <TableHead>Agent</TableHead>
+                  <TableHead>Side</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead className="text-right">Qty</TableHead>
+                  <TableHead className="text-right">Price</TableHead>
+                  <TableHead className="hidden sm:table-cell">Reason</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {book.fills.slice(0, 16).map((fill) => (
+                  <TableRow key={fill.id}>
+                    <TableCell className="font-mono text-xs text-muted-foreground">
+                      {fill.at.replace("T", " ").slice(0, 19)}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">{fill.agentId}</TableCell>
+                    <TableCell>
+                      <Badge variant={fill.side === "BUY" ? "secondary" : "outline"}>{fill.side}</Badge>
+                    </TableCell>
+                    <TableCell className="font-medium">{fill.symbol}</TableCell>
+                    <TableCell className="text-right font-mono">{formatNumber(fill.qty, 4)}</TableCell>
+                    <TableCell className="text-right font-mono">{formatNumber(fill.price, 4)}</TableCell>
+                    <TableCell className="hidden max-w-md truncate text-muted-foreground sm:table-cell">
+                      {fill.reason}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      ) : null}
+    </div>
+  );
 }
 
 export function PnlPanel({

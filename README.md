@@ -28,10 +28,13 @@ npm install
 npm run tape      # refresh data/live-tape.json from Yahoo + Coinbase + CoinGecko
 npm run attest    # seal the book and print the funnel + BTC walkthrough
 npm test
+npm run paper     # tick the paper book (loop; --once for a single pass)
 npm run dev       # http://127.0.0.1:43173
 ```
 
 `Mark to market` on the desk pulls a fresh Coinbase/Gecko spot and reseals. It does not fabricate bars.
+
+Paper agents (`stack-long`, `stack-crypto`, `meme-cleared`) tick on desk load, reseal, and `npm run paper`. They equal-weight long names that cleared the stack and sit in cash when none did. Every fill is `venue=paper`. There is no live order path — `TRADING_MODE=live` is refused.
 
 The desk also surfaces four measured lanes — none of them invent a number:
 

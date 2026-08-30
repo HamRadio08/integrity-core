@@ -3,6 +3,7 @@ import { gateRequest } from "@/lib/audit/guard";
 import { GECKO_IDS } from "@/lib/audit/live";
 import { DEMO_SEED, publicRun, replaceActiveBundle } from "@/lib/audit/run";
 import { setSpotOverlay } from "@/lib/audit/market";
+import { tickActivePaper } from "@/lib/paper";
 
 export async function POST(request: Request) {
   const gate = gateRequest(request, "refresh");
@@ -40,6 +41,7 @@ export async function POST(request: Request) {
           : undefined,
     });
     const bundle = replaceActiveBundle(DEMO_SEED);
+    tickActivePaper(bundle, { force: true });
     return NextResponse.json(publicRun(bundle));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Refresh failed.";
