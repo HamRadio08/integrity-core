@@ -14,6 +14,7 @@ import { POST as verifyPost } from "./verify/route";
 import { POST as scanPost } from "./scan/route";
 import { POST as refreshPost } from "./refresh/route";
 import { GET as candidateGet } from "./candidate/[id]/route";
+import { GET as liveGet } from "./live/route";
 
 // Route handlers are imported directly (no HTTP server): they are plain async
 // functions over the standard Request, and next/server resolves under the
@@ -284,6 +285,83 @@ describe("POST /api/audit/scan", () => {
     }
     const response = await scanPost(jsonPost("/api/audit/scan", { seed: DEMO_SEED }));
     expect(response.status).toBe(429);
+  });
+});
+
+describe("GET /api/audit/live", () => {
+  it("rejects cross-site browser requests", async () => {
+    const response = await liveGet(
+      new Request("http://127.0.0.1:43173/api/audit/live", { headers: { "sec-fetch-site": "cross-site" } }),
+    );
+    expect(response.status).toBe(403);
+  });
+
+  it("returns measured futures, spots, and CI from stubbed venues", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        const href = String(url);
+        if (href.includes("coingecko")) {
+          return { ok: true, json: async () => ({ bitcoin: { usd: 78_200, usd_24h_change: 1.1 } }) };
+        }
+        if (href.includes("coinbase")) {
+          return {
+            ok: true,
+            json: async () => ({
+              price: "78200.5",
+              time: "2026-08-30T06:00:00Z",
+              volume: "1",
+              bid: "78199",
+              ask: "78201",
+            }),
+          };
+        }
+        if (href.includes("api.github.com")) {
+          return {
+            ok: true,
+            json: async () => ({
+              workflow_runs: [
+                {
+                  id: 99,
+                  name: "CI",
+                  status: "completed",
+                  conclusion: "success",
+                  head_branch: "main",
+                  event: "push",
+                  html_url: "https://github.com/HamRadio08/integrity-core/actions/runs/99",
+                  updated_at: "2026-08-30T05:00:00Z",
+                },
+              ],
+            }),
+          };
+        }
+        return {
+          ok: true,
+          json: async () => ({
+            chart: {
+              result: [
+                {
+                  meta: {
+                    regularMarketPrice: 100,
+                    regularMarketTime: 1_787_950_799,
+                    chartPreviousClose: 99,
+                    shortName: "stub",
+                  },
+                  indicators: { quote: [{ close: [98, 99, 100] }] },
+                },
+              ],
+            },
+          }),
+        };
+      }) as unknown as typeof fetch,
+    );
+    const response = await liveGet(new Request("http://127.0.0.1:43173/api/audit/live"));
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.spots[0].symbol).toBe("BTC");
+    expect(payload.spots[0].usd).toBe(78200.5);
+    expect(payload.ci.latest.conclusion).toBe("success");
+    expect(payload.futures.every((row: { last: number | null }) => row.last === 100)).toBe(true);
   });
 });
 

@@ -33,6 +33,15 @@ npm run dev       # http://127.0.0.1:43173
 
 `Mark to market` on the desk pulls a fresh Coinbase/Gecko spot and reseals. It does not fabricate bars.
 
+The desk also surfaces four measured lanes — none of them invent a number:
+
+- **PnL by strategy** — equal-weight 5d/20d tape returns of sealed names, grouped by kill attribution (and the names that cleared the stack). This is not executed trading P&L.
+- **Futures** — live Yahoo front-month prints (`BTC=F`, `ES=F`, …). A venue miss stays blank.
+- **CI runner / watch lanes** — GitHub Actions for this repo plus role-contract and freshness watches from the sealed book.
+- **Meme position ladder** — meme-sector names already on the tape (DOGE, SHIB, WIF), ranked by measured 5d return, with live spots shown beside the sealed last.
+
+`Refresh live lanes` re-pulls futures, spots, and CI without rewriting the seal. The ledger Inspect control is a real `<button>`, not a clickable row.
+
 ## API hardening
 
 The `/api/audit/*` routes carry request-boundary guards (`src/lib/audit/guard.ts`):

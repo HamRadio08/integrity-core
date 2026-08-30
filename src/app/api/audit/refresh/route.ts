@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { gateRequest } from "@/lib/audit/guard";
+import { GECKO_IDS } from "@/lib/audit/live";
 import { DEMO_SEED, publicRun, replaceActiveBundle } from "@/lib/audit/run";
 import { setSpotOverlay } from "@/lib/audit/market";
 
@@ -11,27 +12,32 @@ export async function POST(request: Request) {
   try {
     const [geckoRes, coinbaseRes] = await Promise.all([
       fetch(
-        "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true",
-        { headers: { "User-Agent": "stack-attestation/1.0" } },
+        `https://api.coingecko.com/api/v3/simple/price?ids=${GECKO_IDS}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true`,
+        { cache: "no-store", headers: { "User-Agent": "stack-attestation/1.0" } },
       ),
       fetch("https://api.exchange.coinbase.com/products/BTC-USD/ticker", {
+        cache: "no-store",
         headers: { "User-Agent": "stack-attestation/1.0" },
       }),
     ]);
-    if (!geckoRes.ok || !coinbaseRes.ok) {
+    const gecko = geckoRes.ok ? await geckoRes.json() : null;
+    const coinbase = coinbaseRes.ok ? await coinbaseRes.json() : null;
+    if (!gecko && !coinbase) {
       return NextResponse.json({ error: "Live venue refresh failed." }, { status: 502 });
     }
-    const gecko = await geckoRes.json();
-    const coinbase = await coinbaseRes.json();
+    const price = Number(coinbase?.price);
     setSpotOverlay({
-      gecko,
-      coinbase: {
-        price: Number(coinbase.price),
-        time: String(coinbase.time),
-        volume: Number(coinbase.volume),
-        bid: Number(coinbase.bid),
-        ask: Number(coinbase.ask),
-      },
+      gecko: gecko ?? undefined,
+      coinbase:
+        Number.isFinite(price) && price > 0
+          ? {
+              price,
+              time: String(coinbase.time ?? new Date().toISOString()),
+              volume: Number(coinbase.volume) || 0,
+              bid: Number(coinbase.bid) || price,
+              ask: Number(coinbase.ask) || price,
+            }
+          : undefined,
     });
     const bundle = replaceActiveBundle(DEMO_SEED);
     return NextResponse.json(publicRun(bundle));

@@ -1,4 +1,5 @@
 import { STACK_CONFIG } from "./config";
+import { buildDesk } from "./derived";
 import { sealUniverse } from "./engine";
 import { GENESIS } from "./hash";
 import { attestRun, buildFunnel, verifyIntegrity } from "./invariants";
@@ -61,6 +62,16 @@ export function buildAttestedRun(
     startedAt,
   });
 
+  const funnel = buildFunnel(records);
+  const tapeMeta = tapeInfo(tape);
+  const featured = {
+    daily: featuredSealed.daily,
+    hourly: featuredSealed.hourly,
+    hourlyNote,
+    pump: measurePump(tape),
+  };
+  const desk = buildDesk({ records, funnel, tape: tapeMeta, integrity });
+
   return {
     protocol: "stack-attestation/v1",
     startedAt,
@@ -68,15 +79,11 @@ export function buildAttestedRun(
     config,
     records,
     barsByCandidate,
-    funnel: buildFunnel(records),
-    tape: tapeInfo(tape),
-    featured: {
-      daily: featuredSealed.daily,
-      hourly: featuredSealed.hourly,
-      hourlyNote,
-      pump: measurePump(tape),
-    },
+    funnel,
+    tape: tapeMeta,
+    featured,
     integrity,
+    desk,
     ...attested,
   };
 }

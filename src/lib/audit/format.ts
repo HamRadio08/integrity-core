@@ -47,3 +47,11 @@ export function severityLabel(severity: CheckSeverity): string {
   if (severity === "warn") return "WATCH";
   return "BROKEN";
 }
+
+export function formatAge(ms: number): string {
+  const abs = Math.max(0, ms);
+  if (abs < 60_000) return `${Math.round(abs / 1000)}s`;
+  if (abs < 3_600_000) return `${Math.round(abs / 60_000)}m`;
+  if (abs < 86_400_000) return `${(abs / 3_600_000).toFixed(1)}h`;
+  return `${(abs / 86_400_000).toFixed(1)}d`;
+}

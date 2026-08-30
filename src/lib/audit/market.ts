@@ -77,19 +77,27 @@ export function tapeInfo(tape: LiveTape): TapeInfo {
   };
 }
 
+function spotForSymbol(symbol: string, tape: LiveTape): number | null {
+  const gecko = tape.spot?.gecko ?? {};
+  const coinbase = tape.spot?.coinbase?.price;
+  const fromGecko = (id: string) => {
+    const usd = gecko[id]?.usd;
+    return typeof usd === "number" && Number.isFinite(usd) && usd > 0 ? usd : null;
+  };
+  if (symbol === "BTC") return (typeof coinbase === "number" && coinbase > 0 ? coinbase : null) ?? fromGecko("bitcoin");
+  if (symbol === "ETH") return fromGecko("ethereum");
+  if (symbol === "SOL") return fromGecko("solana");
+  if (symbol === "DOGE") return fromGecko("dogecoin");
+  if (symbol === "SHIB") return fromGecko("shiba-inu");
+  if (symbol === "WIF") return fromGecko("dogwifcoin");
+  return null;
+}
+
 export function assetToCandidate(asset: TapeAsset, index: number, barCount: number, tape: LiveTape): Candidate {
   let bars = asset.bars.slice(-barCount).map(roundBar);
   const asOf = bars.at(-1)?.ts ?? tape.fetchedAt.slice(0, 10);
-  if (asset.symbol === "BTC") {
-    const spot = tape.spot?.coinbase?.price ?? tape.spot?.gecko?.bitcoin?.usd;
-    if (spot) bars = markToMarket(bars, spot, asOf);
-  }
-  if (asset.symbol === "ETH" && tape.spot?.gecko?.ethereum?.usd) {
-    bars = markToMarket(bars, tape.spot.gecko.ethereum.usd, asOf);
-  }
-  if (asset.symbol === "SOL" && tape.spot?.gecko?.solana?.usd) {
-    bars = markToMarket(bars, tape.spot.gecko.solana.usd, asOf);
-  }
+  const spot = spotForSymbol(asset.symbol, tape);
+  if (spot != null) bars = markToMarket(bars, spot, asOf);
   const last = bars.at(-1)?.close ?? 0;
   return {
     id: `C-${String(index + 1).padStart(3, "0")}`,
