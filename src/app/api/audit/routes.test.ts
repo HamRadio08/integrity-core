@@ -15,6 +15,8 @@ import { POST as scanPost } from "./scan/route";
 import { POST as refreshPost } from "./refresh/route";
 import { GET as candidateGet } from "./candidate/[id]/route";
 import { GET as liveGet } from "./live/route";
+import { GET as paperGet, POST as paperPost } from "./paper/route";
+import { resetPaperBookForTests } from "@/lib/paper";
 
 // Route handlers are imported directly (no HTTP server): they are plain async
 // functions over the standard Request, and next/server resolves under the
@@ -23,6 +25,7 @@ import { GET as liveGet } from "./live/route";
 
 beforeEach(() => {
   resetRateLimits();
+  resetPaperBookForTests();
 });
 
 afterEach(() => {
@@ -362,6 +365,26 @@ describe("GET /api/audit/live", () => {
     expect(payload.spots[0].usd).toBe(78200.5);
     expect(payload.ci.latest.conclusion).toBe("success");
     expect(payload.futures.every((row: { last: number | null }) => row.last === 100)).toBe(true);
+  });
+});
+
+describe("GET/POST /api/audit/paper", () => {
+  it("rejects cross-site browser requests", async () => {
+    const response = await paperGet(
+      new Request("http://127.0.0.1:43173/api/audit/paper", { headers: { "sec-fetch-site": "cross-site" } }),
+    );
+    expect(response.status).toBe(403);
+  });
+
+  it("ticks paper agents against the sealed book", async () => {
+    const response = await paperPost(new Request("http://127.0.0.1:43173/api/audit/paper", { method: "POST" }));
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.mode).toBe("paper");
+    expect(payload.venue).toBe("paper-ledger");
+    expect(payload.fills.every((row: { venue: string }) => row.venue === "paper")).toBe(true);
+    expect(payload.agents).toHaveLength(3);
+    expect(payload.openPositions).toBeGreaterThan(0);
   });
 });
 

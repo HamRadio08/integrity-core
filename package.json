@@ -10,7 +10,8 @@
     "test": "vitest run",
     "typecheck": "next typegen && tsc --noEmit",
     "attest": "tsx scripts/attest.ts",
-    "tape": "tsx scripts/fetch-tape.ts"
+    "tape": "tsx scripts/fetch-tape.ts",
+    "paper": "tsx scripts/paper-trade.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

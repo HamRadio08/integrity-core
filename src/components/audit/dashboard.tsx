@@ -32,9 +32,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { FuturesPanel, MemeLadderPanel, PnlPanel, WatchLanesPanel } from "@/components/audit/desk-panels";
-import { formatAge, formatNumber, formatPct, formatShare, shortHash } from "@/lib/audit/format";
+import { FuturesPanel, MemeLadderPanel, PaperBookPanel, PnlPanel, WatchLanesPanel } from "@/components/audit/desk-panels";
+import { formatAge, formatNumber, formatPct, formatShare, formatUsd, shortHash } from "@/lib/audit/format";
 import type { LiveDesk } from "@/lib/audit/live";
+import type { PaperBook } from "@/lib/paper";
 import type {
   AuditRun,
   Bar,
@@ -57,11 +58,13 @@ const GATE_COLORS: Record<GateId, string> = {
 export function Dashboard({
   initial,
   initialLive = null,
+  initialPaper = null,
   tamperEnabled = false,
   bootToken,
 }: {
   initial: AuditRun;
   initialLive?: LiveDesk | null;
+  initialPaper?: PaperBook | null;
   tamperEnabled?: boolean;
   bootToken?: string;
 }) {
@@ -73,6 +76,8 @@ export function Dashboard({
   const [tab, setTab] = useState("ledger");
   const [busy, setBusy] = useState<"refresh" | "reshuffle" | "tamper" | null>(null);
   const [liveBusy, setLiveBusy] = useState(false);
+  const [paperBusy, setPaperBusy] = useState(false);
+  const [paper, setPaper] = useState<PaperBook | null>(initialPaper);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [tamper, setTamper] = useState<IntegrityReport | null>(null);
@@ -106,6 +111,18 @@ export function Dashboard({
     return payload;
   }
 
+  async function refreshPaper(force = false) {
+    setPaperBusy(true);
+    try {
+      const payload = (await loadRun("/api/audit/paper", force ? { method: "POST" } : undefined)) as PaperBook;
+      setPaper(payload);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Paper book failed.");
+    } finally {
+      setPaperBusy(false);
+    }
+  }
+
   async function refreshLive() {
     setLiveBusy(true);
     try {
@@ -124,6 +141,7 @@ export function Dashboard({
   useEffect(() => {
     const timer = window.setInterval(() => {
       void refreshLive();
+      void refreshPaper();
     }, 45_000);
     return () => window.clearInterval(timer);
     // Heartbeat only. The first live payload is rendered from the server.
@@ -142,6 +160,7 @@ export function Dashboard({
         `Marked to market. BTC sealed last ${spot == null ? "—" : `$${formatNumber(spot, 0)}`} at ${next.tape.spotTime ?? next.tape.fetchedAt}. Chain ${shortHash(next.chainHead)}.`,
       );
       await refreshLive();
+      await refreshPaper(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Refresh failed.");
     } finally {
@@ -161,6 +180,7 @@ export function Dashboard({
       setNotice(
         `Resealed ${next.candidateCount} names from the same tape and seed. Chain ${shortHash(next.chainHead)}. Same book is the proof the seal is deterministic.`,
       );
+      await refreshPaper(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Reseal failed.");
     } finally {
@@ -179,6 +199,15 @@ export function Dashboard({
         ? "Ledger showing the whole sealed book."
         : `Ledger filtered to ${id === "PASSED" ? "names that cleared the stack" : `${id} kills`}.`,
     );
+  }
+
+  function showPaperSymbol(symbol: string) {
+    setQuery(symbol);
+    setMarket("all");
+    setKillFilter("all");
+    setSectorFilter("all");
+    setTab("ledger");
+    setNotice(`Ledger filtered to sealed ${symbol}.`);
   }
 
   function showMemeLedger() {
@@ -242,10 +271,14 @@ export function Dashboard({
             <p className="max-w-2xl text-sm text-muted-foreground">
               Every name is forced through trend → strength → participation → universe → acceleration.
               The desk reseals venue tape, replays the stack, and checks that each gate still occupies
-              the role it was given. No synthetic OHLC.
+              the role it was given. Agents trade the cleared names in paper mode only. No synthetic
+              OHLC and no live orders.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <Badge variant="outline" className="h-7 px-3">
+              PAPER ONLY
+            </Badge>
             <Badge variant={integrityOk ? "secondary" : "destructive"} className="h-7 px-3">
               {integrityOk ? (
                 <CheckCircle2 data-icon="inline-start" />
@@ -315,7 +348,7 @@ export function Dashboard({
 
         {pump ? <PumpCard run={run} onInspect={() => openCandidate("C-BTC-1D")} /> : null}
 
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <Stat label="Names on tape" value={String(run.candidateCount)} hint={`${run.killedCount} killed · ${run.passedCount} cleared`} />
           <Stat
             label="BTC spot"
@@ -349,6 +382,15 @@ export function Dashboard({
             label="Contract"
             value={run.integrity.contractHeld ? "Holding" : "Drift"}
             hint={run.integrity.contractHeld ? "Kill shares still match intended roles." : "Live book has left a design band."}
+          />
+          <Stat
+            label="Paper equity"
+            value={paper ? formatUsd(paper.equity) : "—"}
+            hint={
+              paper
+                ? `${paper.openPositions} paper names · ${paper.agents.filter((row) => row.status === "active").length} agents active`
+                : "Paper book has not ticked."
+            }
           />
         </section>
 
@@ -411,6 +453,7 @@ export function Dashboard({
         <Tabs value={tab} onValueChange={(value) => setTab(String(value))}>
           <TabsList variant="line" className="w-full justify-start overflow-x-auto">
             <TabsTrigger value="ledger">Ledger</TabsTrigger>
+            <TabsTrigger value="paper">Paper book</TabsTrigger>
             <TabsTrigger value="pnl">PnL by strategy</TabsTrigger>
             <TabsTrigger value="futures">Futures</TabsTrigger>
             <TabsTrigger value="watch">CI / watch lanes</TabsTrigger>
@@ -512,6 +555,15 @@ export function Dashboard({
                 </Table>
               </Card>
             )}
+          </TabsContent>
+
+          <TabsContent value="paper" className="pt-4">
+            <PaperBookPanel
+              book={paper}
+              onTick={() => void refreshPaper(true)}
+              onInspect={showPaperSymbol}
+              busy={paperBusy}
+            />
           </TabsContent>
 
           <TabsContent value="pnl" className="pt-4">
