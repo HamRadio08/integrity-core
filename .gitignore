@@ -38,6 +38,11 @@ yarn-error.log*
 
 # paper ledger is runtime state, not a sealed artifact
 /data/paper-book.json
+/data/box.env
+/data/box.pid
+/data/box-stdout.log
+/data/box-stderr.log
+/.box-host
 
 # typescript
 *.tsbuildinfo

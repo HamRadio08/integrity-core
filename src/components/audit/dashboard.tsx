@@ -35,6 +35,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FuturesPanel, MemeLadderPanel, PaperBookPanel, PnlPanel, WatchLanesPanel } from "@/components/audit/desk-panels";
 import { formatAge, formatNumber, formatPct, formatShare, formatUsd, shortHash } from "@/lib/audit/format";
 import type { LiveDesk } from "@/lib/audit/live";
+import type { DeskHealth } from "@/lib/box/host";
 import type { PaperBook } from "@/lib/paper";
 import type {
   AuditRun,
@@ -59,12 +60,14 @@ export function Dashboard({
   initial,
   initialLive = null,
   initialPaper = null,
+  initialHealth = null,
   tamperEnabled = false,
   bootToken,
 }: {
   initial: AuditRun;
   initialLive?: LiveDesk | null;
   initialPaper?: PaperBook | null;
+  initialHealth?: DeskHealth | null;
   tamperEnabled?: boolean;
   bootToken?: string;
 }) {
@@ -85,6 +88,7 @@ export function Dashboard({
   const [detail, setDetail] = useState<{ record: CandidateRecord; bars: Bar[] } | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [live, setLive] = useState<LiveDesk | null>(initialLive);
+  const [health, setHealth] = useState<DeskHealth | null>(initialHealth);
 
   const filtered = useMemo(() => {
     return run.records.filter((record) => {
@@ -123,6 +127,15 @@ export function Dashboard({
     }
   }
 
+  async function refreshHealth() {
+    try {
+      const payload = (await loadRun("/api/health")) as DeskHealth;
+      if (payload.ok) setHealth(payload);
+    } catch {
+      // Health is a badge, not a desk failure.
+    }
+  }
+
   async function refreshLive() {
     setLiveBusy(true);
     try {
@@ -132,6 +145,7 @@ export function Dashboard({
       if (payload.errors.length) {
         setError(payload.errors.join(" "));
       }
+      await refreshHealth();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Live lanes failed.");
     } finally {
@@ -279,6 +293,10 @@ export function Dashboard({
           <div className="flex flex-wrap items-center gap-2">
             <Badge variant="outline" className="h-7 px-3">
               PAPER ONLY
+            </Badge>
+            <Badge variant={health?.host === "alienware" ? "secondary" : "outline"} className="h-7 px-3 font-mono">
+              {health?.host === "alienware" ? "Alienware" : (health?.host ?? "host unknown")}
+              {health?.gitSha ? ` · ${shortHash(health.gitSha)}` : ""}
             </Badge>
             <Badge variant={integrityOk ? "secondary" : "destructive"} className="h-7 px-3">
               {integrityOk ? (

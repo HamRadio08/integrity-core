@@ -33,15 +33,32 @@ npm run dev       # http://127.0.0.1:43173
 PORT=43173 npm start   # production server on 0.0.0.0
 ```
 
-## Public production
+## Live box (Alienware)
 
-This desk is a Node server (live Yahoo / Coinbase / CoinGecko / GitHub Actions, mark-to-market, paper tick). It is not a static export.
+Production is the Alienware. It tracks `main`. This cloud agent cannot start a process on that machine.
 
-Keep it live from `main`:
+On the Alienware, from this repo:
 
-1. Import [this repo](https://github.com/HamRadio08/integrity-core) at [vercel.com/new](https://vercel.com/new). Framework: Next.js. Root: `.`
-2. Or apply `render.yaml` at [dashboard.render.com/blueprint/new](https://dashboard.render.com/blueprint/new).
-3. Optional: add `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID` as repo Actions secrets so `.github/workflows/production.yml` deploys on every main push.
+```powershell
+# Windows (typical Alienware)
+.\scripts\box-install.ps1
+```
+
+```bash
+# Linux
+chmod +x scripts/box-install.sh
+./scripts/box-install.sh
+```
+
+That pulls `origin/main`, builds, binds `0.0.0.0:43173`, and keeps the box on `main` (logon + every 5 minutes on Windows; systemd + timer on Linux). One-shot without the scheduler:
+
+```bash
+npm run box -- --track-main
+```
+
+The header badge reads `Alienware · <sha>` only when `DESK_HOST=alienware`. `/api/health` reports the same host and sha. Open the desk at `http://<alienware-lan-or-tailscale>:43173/`.
+
+Vercel / Render remain optional remote backups. They do not replace the box.
 
 Tamper lab stays off when `NODE_ENV=production`. `npm start` binds `0.0.0.0` and honors `PORT`. `/api/health` is the uptime probe.
 

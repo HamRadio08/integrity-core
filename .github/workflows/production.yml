@@ -1,6 +1,6 @@
-# Publish the desk whenever main moves.
-# Vercel is the preferred public host (full Next.js). The job is a no-op until
-# VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID are set on the repo.
+# Optional remote publish whenever main moves.
+# The live host is the Alienware (`npm run box`). Vercel is a backup only and
+# this job is a no-op until VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID exist.
 
 name: Production
 
