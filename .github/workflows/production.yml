@@ -1,0 +1,60 @@
+# Publish the desk whenever main moves.
+# Vercel is the preferred public host (full Next.js). The job is a no-op until
+# VERCEL_TOKEN / VERCEL_ORG_ID / VERCEL_PROJECT_ID are set on the repo.
+
+name: Production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-main
+  cancel-in-progress: false
+
+jobs:
+  vercel:
+    name: Deploy to Vercel
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+    steps:
+      - name: Require Vercel credentials
+        run: |
+          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
+            echo "Vercel secrets are not set. Import the repo at https://vercel.com/new or add VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID."
+            exit 0
+          fi
+          echo "has_vercel=1" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        if: env.has_vercel == '1'
+
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        if: env.has_vercel == '1'
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install Vercel CLI
+        if: env.has_vercel == '1'
+        run: npm install --global vercel@41
+
+      - name: Pull production env
+        if: env.has_vercel == '1'
+        run: vercel pull --yes --environment=production --token="$VERCEL_TOKEN"
+
+      - name: Build
+        if: env.has_vercel == '1'
+        run: vercel build --prod --token="$VERCEL_TOKEN"
+
+      - name: Deploy production
+        if: env.has_vercel == '1'
+        run: vercel deploy --prebuilt --prod --token="$VERCEL_TOKEN"

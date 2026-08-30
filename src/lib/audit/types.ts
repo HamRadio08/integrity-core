@@ -247,6 +247,7 @@ export interface ContractWatch {
 }
 
 export interface DeskSnapshot {
+  measuredAt: string;
   freshness: Freshness;
   pnlByStrategy: PnlBucket[];
   memeLadder: MemeRung[];

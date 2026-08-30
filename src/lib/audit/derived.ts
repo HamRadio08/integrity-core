@@ -169,6 +169,7 @@ export function buildDesk(
 ): DeskSnapshot {
   const freshness = buildFreshness(run.tape, nowMs);
   return {
+    measuredAt: run.tape.spotTime ?? run.tape.fetchedAt,
     freshness,
     pnlByStrategy: buildPnlByStrategy(run.records),
     memeLadder: buildMemeLadder(run.records),

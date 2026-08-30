@@ -30,7 +30,20 @@ npm run attest    # seal the book and print the funnel + BTC walkthrough
 npm test
 npm run paper     # tick the paper book (loop; --once for a single pass)
 npm run dev       # http://127.0.0.1:43173
+PORT=43173 npm start   # production server on 0.0.0.0
 ```
+
+## Public production
+
+This desk is a Node server (live Yahoo / Coinbase / CoinGecko / GitHub Actions, mark-to-market, paper tick). It is not a static export.
+
+Keep it live from `main`:
+
+1. Import [this repo](https://github.com/HamRadio08/integrity-core) at [vercel.com/new](https://vercel.com/new). Framework: Next.js. Root: `.`
+2. Or apply `render.yaml` at [dashboard.render.com/blueprint/new](https://dashboard.render.com/blueprint/new).
+3. Optional: add `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID` as repo Actions secrets so `.github/workflows/production.yml` deploys on every main push.
+
+Tamper lab stays off when `NODE_ENV=production`. `npm start` binds `0.0.0.0` and honors `PORT`. `/api/health` is the uptime probe.
 
 `Mark to market` on the desk pulls a fresh Coinbase/Gecko spot and reseals. It does not fabricate bars.
 
@@ -43,7 +56,9 @@ The desk also surfaces four measured lanes — none of them invent a number:
 - **CI runner / watch lanes** — GitHub Actions for this repo plus role-contract and freshness watches from the sealed book.
 - **Meme position ladder** — meme-sector names already on the tape (DOGE, SHIB, WIF), ranked by measured 5d return, with live spots shown beside the sealed last.
 
-`Refresh live lanes` re-pulls futures, spots, and CI without rewriting the seal. The ledger Inspect control is a real `<button>`, not a clickable row.
+`Refresh live lanes` re-pulls futures, spots, and CI, then reseals the book from that overlay so PnL means, meme lasts, and paper marks stay on the same print the dashboard is showing. The ledger Inspect control is a real `<button>`, not a clickable row.
+
+Production is fed only from `main`. Keep `main` current; a host tracking any other branch is behind by definition.
 
 ## API hardening
 

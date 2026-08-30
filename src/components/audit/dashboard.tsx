@@ -128,6 +128,7 @@ export function Dashboard({
     try {
       const payload = (await loadRun("/api/audit/live")) as LiveDesk;
       setLive(payload);
+      if (payload.run?.desk) setRun(payload.run);
       if (payload.errors.length) {
         setError(payload.errors.join(" "));
       }
@@ -567,7 +568,11 @@ export function Dashboard({
           </TabsContent>
 
           <TabsContent value="pnl" className="pt-4">
-            <PnlPanel buckets={run.desk.pnlByStrategy} onInspectBucket={showBucket} />
+            <PnlPanel
+              buckets={run.desk.pnlByStrategy}
+              measuredAt={run.desk.measuredAt}
+              onInspectBucket={showBucket}
+            />
           </TabsContent>
 
           <TabsContent value="futures" className="pt-4">

@@ -8,13 +8,15 @@ import {
   tokenMatches,
 } from "@/lib/audit/guard";
 import { validateVerifyPayload, VERIFY_MAX_BYTES } from "@/lib/audit/verify-payload";
-import { getDemoBundle, publicRun, DEMO_SEED } from "@/lib/audit/run";
+import { getDemoBundle, publicRun, DEMO_SEED, replaceActiveBundle } from "@/lib/audit/run";
+import { setSpotOverlay } from "@/lib/audit/market";
 import { POST as tamperPost } from "./tamper/route";
 import { POST as verifyPost } from "./verify/route";
 import { POST as scanPost } from "./scan/route";
 import { POST as refreshPost } from "./refresh/route";
 import { GET as candidateGet } from "./candidate/[id]/route";
 import { GET as liveGet } from "./live/route";
+import { resetLiveCache } from "@/lib/audit/live";
 import { GET as paperGet, POST as paperPost } from "./paper/route";
 import { resetPaperBookForTests } from "@/lib/paper";
 
@@ -26,11 +28,14 @@ import { resetPaperBookForTests } from "@/lib/paper";
 beforeEach(() => {
   resetRateLimits();
   resetPaperBookForTests();
+  resetLiveCache();
 });
 
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
+  setSpotOverlay(null);
+  replaceActiveBundle(DEMO_SEED);
 });
 
 const jsonPost = (path: string, body: unknown, headers: Record<string, string> = {}) =>
@@ -291,6 +296,17 @@ describe("POST /api/audit/scan", () => {
   });
 });
 
+describe("GET /api/health", () => {
+  it("reports the desk is up without a gate", async () => {
+    const { GET } = await import("../health/route");
+    const response = await GET();
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.ok).toBe(true);
+    expect(payload.protocol).toBe("stack-attestation/v1");
+  });
+});
+
 describe("GET /api/audit/live", () => {
   it("rejects cross-site browser requests", async () => {
     const response = await liveGet(
@@ -365,6 +381,10 @@ describe("GET /api/audit/live", () => {
     expect(payload.spots[0].usd).toBe(78200.5);
     expect(payload.ci.latest.conclusion).toBe("success");
     expect(payload.futures.every((row: { last: number | null }) => row.last === 100)).toBe(true);
+    expect(payload.run.desk.pnlByStrategy[0].id).toBe("BOOK");
+    expect(payload.run.desk.measuredAt).toBeTruthy();
+    const btc = payload.run.records.find((row: { symbol: string }) => row.symbol === "BTC");
+    expect(btc.last).toBe(78200.5);
   });
 });
 
