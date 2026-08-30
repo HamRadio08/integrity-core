@@ -3,6 +3,7 @@ import { gateRequest } from "@/lib/audit/guard";
 import { fetchLiveDesk } from "@/lib/audit/live";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 export async function GET(request: Request) {
   const gate = gateRequest(request, "live");

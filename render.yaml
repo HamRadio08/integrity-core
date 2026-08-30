@@ -1,0 +1,15 @@
+# One-click public host: https://dashboard.render.com/blueprint/new
+# Connect this repo; every push to main stays deployed.
+services:
+  - type: web
+    name: stack-attestation
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: AUDIT_TAMPER_ENABLED
+        value: "0"

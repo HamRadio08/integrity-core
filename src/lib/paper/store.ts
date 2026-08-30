@@ -33,9 +33,13 @@ function loadFromDisk(): PaperBook | null {
 
 function saveToDisk(book: PaperBook): void {
   if (!persistEnabled()) return;
-  const path = paperBookPath();
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(book, null, 2)}\n`);
+  try {
+    const path = paperBookPath();
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, `${JSON.stringify(book, null, 2)}\n`);
+  } catch {
+    // Serverless / read-only production disks still keep the book in process memory.
+  }
 }
 
 export function resetPaperBookForTests(): void {

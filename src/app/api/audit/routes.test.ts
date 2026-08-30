@@ -15,6 +15,7 @@ import { POST as scanPost } from "./scan/route";
 import { POST as refreshPost } from "./refresh/route";
 import { GET as candidateGet } from "./candidate/[id]/route";
 import { GET as liveGet } from "./live/route";
+import { resetLiveCache } from "@/lib/audit/live";
 import { GET as paperGet, POST as paperPost } from "./paper/route";
 import { resetPaperBookForTests } from "@/lib/paper";
 
@@ -26,6 +27,7 @@ import { resetPaperBookForTests } from "@/lib/paper";
 beforeEach(() => {
   resetRateLimits();
   resetPaperBookForTests();
+  resetLiveCache();
 });
 
 afterEach(() => {
@@ -288,6 +290,17 @@ describe("POST /api/audit/scan", () => {
     }
     const response = await scanPost(jsonPost("/api/audit/scan", { seed: DEMO_SEED }));
     expect(response.status).toBe(429);
+  });
+});
+
+describe("GET /api/health", () => {
+  it("reports the desk is up without a gate", async () => {
+    const { GET } = await import("../health/route");
+    const response = await GET();
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.ok).toBe(true);
+    expect(payload.protocol).toBe("stack-attestation/v1");
   });
 });
 

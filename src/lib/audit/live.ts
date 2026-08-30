@@ -225,14 +225,24 @@ export async function fetchLiveSpots(): Promise<{ spots: LiveSpot[]; coinbaseAsO
   return { spots, coinbaseAsOf, errors };
 }
 
+const LIVE_TTL_MS = 15_000;
+let liveCache: { at: number; desk: LiveDesk } | null = null;
+
+export function resetLiveCache(): void {
+  liveCache = null;
+}
+
 export async function fetchLiveDesk(): Promise<LiveDesk> {
+  if (liveCache && Date.now() - liveCache.at < LIVE_TTL_MS) {
+    return liveCache.desk;
+  }
   const fetchedAt = new Date().toISOString();
   const [futures, ci, spots] = await Promise.all([fetchFutures(), fetchCiRuns(), fetchLiveSpots()]);
   const errors = [...spots.errors];
   if (ci.error) errors.push(`CI: ${ci.error}`);
   const missingFutures = futures.filter((row) => row.last == null).length;
   if (missingFutures === futures.length) errors.push("Yahoo returned no futures prints.");
-  return {
+  const desk: LiveDesk = {
     fetchedAt,
     futures,
     ci: {
@@ -244,4 +254,6 @@ export async function fetchLiveDesk(): Promise<LiveDesk> {
     spots: spots.spots,
     errors,
   };
+  liveCache = { at: Date.now(), desk };
+  return desk;
 }

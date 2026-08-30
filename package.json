@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev --port 43173 --hostname 127.0.0.1",
     "build": "next build",
-    "start": "next start --port 43173 --hostname 127.0.0.1",
+    "start": "next start --hostname 0.0.0.0",
     "lint": "eslint --max-warnings 0",
     "test": "vitest run",
     "typecheck": "next typegen && tsc --noEmit",

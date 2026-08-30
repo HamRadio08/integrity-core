@@ -6,10 +6,10 @@ import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 //   - pure decision helpers (originVerdict, tokenMatches) that take plain
 //     values and return verdicts — unit-testable with no state;
 //   - one process-wide token-bucket rate limiter. Module scope is the honest
-//     design here: the server runs as a single Node process bound to
-//     127.0.0.1 (package.json dev/start), and the Next 16 proxy.ts docs
-//     forbid relying on shared module state inside a proxy file — so the
-//     bucket lives in lib and is consumed inside each route handler.
+//     design here: the server is one Node process (dev binds 127.0.0.1; production
+//     binds 0.0.0.0), and the Next 16 proxy.ts docs forbid relying on shared
+//     module state inside a proxy file — so the bucket lives in lib and is
+//     consumed inside each route handler.
 //
 // Env flags (optional, read at call time so tests can stub them):
 //   AUDIT_TAMPER_ENABLED — "1"/"true" forces the tamper lab on, "0"/"false"

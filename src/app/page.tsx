@@ -5,6 +5,7 @@ import { getActiveBundle, publicRun } from "@/lib/audit/run";
 import { tickActivePaper } from "@/lib/paper";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 export default async function Home() {
   const bundle = getActiveBundle();
