@@ -8,7 +8,8 @@ import {
   tokenMatches,
 } from "@/lib/audit/guard";
 import { validateVerifyPayload, VERIFY_MAX_BYTES } from "@/lib/audit/verify-payload";
-import { getDemoBundle, publicRun, DEMO_SEED } from "@/lib/audit/run";
+import { getDemoBundle, publicRun, DEMO_SEED, replaceActiveBundle } from "@/lib/audit/run";
+import { setSpotOverlay } from "@/lib/audit/market";
 import { POST as tamperPost } from "./tamper/route";
 import { POST as verifyPost } from "./verify/route";
 import { POST as scanPost } from "./scan/route";
@@ -33,6 +34,8 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
+  setSpotOverlay(null);
+  replaceActiveBundle(DEMO_SEED);
 });
 
 const jsonPost = (path: string, body: unknown, headers: Record<string, string> = {}) =>
@@ -378,6 +381,10 @@ describe("GET /api/audit/live", () => {
     expect(payload.spots[0].usd).toBe(78200.5);
     expect(payload.ci.latest.conclusion).toBe("success");
     expect(payload.futures.every((row: { last: number | null }) => row.last === 100)).toBe(true);
+    expect(payload.run.desk.pnlByStrategy[0].id).toBe("BOOK");
+    expect(payload.run.desk.measuredAt).toBeTruthy();
+    const btc = payload.run.records.find((row: { symbol: string }) => row.symbol === "BTC");
+    expect(btc.last).toBe(78200.5);
   });
 });
 

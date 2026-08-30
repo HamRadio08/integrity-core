@@ -60,6 +60,35 @@ export interface LiveDesk {
   ci: { source: string; runs: CiRun[]; latest: CiRun | null; error: string | null };
   spots: LiveSpot[];
   errors: string[];
+  run?: import("./types").AuditRun;
+}
+
+export function overlayFromLiveSpots(spots: LiveSpot[]): {
+  gecko: Record<string, { usd: number; usd_24h_change?: number }>;
+  coinbase?: { price: number; time: string; volume: number; bid: number; ask: number };
+} | null {
+  if (spots.length === 0) return null;
+  const gecko: Record<string, { usd: number; usd_24h_change?: number }> = {};
+  let coinbase: { price: number; time: string; volume: number; bid: number; ask: number } | undefined;
+  for (const spot of spots) {
+    const spec = SPOT_SYMBOLS.find((row) => row.symbol === spot.symbol);
+    if (spec) {
+      gecko[spec.gecko] = {
+        usd: spot.usd,
+        usd_24h_change: spot.change24h == null ? undefined : spot.change24h * 100,
+      };
+    }
+    if (spot.symbol === "BTC" && spot.source === "coinbase") {
+      coinbase = {
+        price: spot.usd,
+        time: spot.asOf,
+        volume: 0,
+        bid: spot.usd,
+        ask: spot.usd,
+      };
+    }
+  }
+  return { gecko, coinbase };
 }
 
 const UA = { "User-Agent": "Mozilla/5.0 (compatible; stack-attestation/1.0)" };

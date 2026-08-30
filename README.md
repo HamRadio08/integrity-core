@@ -56,7 +56,9 @@ The desk also surfaces four measured lanes — none of them invent a number:
 - **CI runner / watch lanes** — GitHub Actions for this repo plus role-contract and freshness watches from the sealed book.
 - **Meme position ladder** — meme-sector names already on the tape (DOGE, SHIB, WIF), ranked by measured 5d return, with live spots shown beside the sealed last.
 
-`Refresh live lanes` re-pulls futures, spots, and CI without rewriting the seal. The ledger Inspect control is a real `<button>`, not a clickable row.
+`Refresh live lanes` re-pulls futures, spots, and CI, then reseals the book from that overlay so PnL means, meme lasts, and paper marks stay on the same print the dashboard is showing. The ledger Inspect control is a real `<button>`, not a clickable row.
+
+Production is fed only from `main`. Keep `main` current; a host tracking any other branch is behind by definition.
 
 ## API hardening
 

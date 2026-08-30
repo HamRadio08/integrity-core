@@ -223,9 +223,11 @@ export function PaperBookPanel({
 
 export function PnlPanel({
   buckets,
+  measuredAt,
   onInspectBucket,
 }: {
   buckets: PnlBucket[];
+  measuredAt?: string | null;
   onInspectBucket: (id: StrategyBucketId) => void;
 }) {
   return (
@@ -234,8 +236,9 @@ export function PnlPanel({
         <CardTitle>PnL by strategy</CardTitle>
         <CardDescription>
           Equal-weight close-to-close returns from sealed venue bars, grouped by kill
-          attribution. This desk does not hold positions — these are measured tape moves,
-          not executed trading P&amp;L. Empty samples stay blank.
+          attribution. Means reseal from the latest Coinbase/Gecko overlay on every live
+          heartbeat — they are not a leftover snapshot. This desk does not hold positions.
+          {measuredAt ? ` As of ${measuredAt}.` : ""}
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-4">
