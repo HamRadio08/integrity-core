@@ -11,7 +11,8 @@
     "typecheck": "next typegen && tsc --noEmit",
     "attest": "tsx scripts/attest.ts",
     "tape": "tsx scripts/fetch-tape.ts",
-    "paper": "tsx scripts/paper-trade.ts"
+    "paper": "tsx scripts/paper-trade.ts",
+    "box": "tsx scripts/box-up.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

@@ -18,6 +18,7 @@ import { GET as candidateGet } from "./candidate/[id]/route";
 import { GET as liveGet } from "./live/route";
 import { resetLiveCache } from "@/lib/audit/live";
 import { GET as paperGet, POST as paperPost } from "./paper/route";
+import { GET as healthGet } from "../health/route";
 import { resetPaperBookForTests } from "@/lib/paper";
 
 // Route handlers are imported directly (no HTTP server): they are plain async
@@ -458,5 +459,19 @@ describe("POST /api/audit/refresh", () => {
     expect(response.status).toBe(200);
     const payload = await response.json();
     expect(Array.isArray(payload.records)).toBe(true);
+  });
+});
+
+describe("GET /api/health", () => {
+  it("names the Alienware host and sha when the box env is set", async () => {
+    vi.stubEnv("DESK_HOST", "alienware");
+    vi.stubEnv("GIT_SHA", "b37e8d3b745fb056218a5e466b30fe32ffb7b889");
+    const response = await healthGet();
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.ok).toBe(true);
+    expect(payload.host).toBe("alienware");
+    expect(payload.gitSha).toBe("b37e8d3b745fb056218a5e466b30fe32ffb7b889");
+    expect(payload.port).toBe(43173);
   });
 });

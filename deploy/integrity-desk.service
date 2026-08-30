@@ -1,0 +1,19 @@
+[Unit]
+Description=Stack attestation desk (Alienware live box)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/integrity-core
+Environment=NODE_ENV=production
+Environment=PORT=43173
+Environment=HOSTNAME=0.0.0.0
+Environment=DESK_HOST=alienware
+EnvironmentFile=-/opt/integrity-core/data/box.env
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -3,6 +3,7 @@ import { bootToken, isTamperEnabled } from "@/lib/audit/guard";
 import { fetchLiveDesk } from "@/lib/audit/live";
 import { getActiveBundle, publicRun } from "@/lib/audit/run";
 import { syncSealedBook } from "@/lib/audit/sync";
+import { healthPayload } from "@/lib/box/host";
 import { tickActivePaper } from "@/lib/paper";
 
 export const dynamic = "force-dynamic";
@@ -17,6 +18,7 @@ export default async function Home() {
       initial={run}
       initialLive={live}
       initialPaper={paper}
+      initialHealth={healthPayload()}
       tamperEnabled={isTamperEnabled()}
       bootToken={bootToken()}
     />

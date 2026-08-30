@@ -1,0 +1,8 @@
+[Unit]
+Description=Pull origin/main onto the Alienware desk
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/integrity-core
+ExecStart=/usr/bin/npm run box -- --track-main
