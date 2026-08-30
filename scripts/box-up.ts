@@ -78,6 +78,10 @@ async function healthy(): Promise<boolean> {
 }
 
 function stopListener(): void {
+  if (systemdUnitPresent()) {
+    spawnSync("systemctl", ["stop", "integrity-desk.service"], { stdio: "inherit" });
+    return;
+  }
   if (process.platform === "win32") {
     const netstat = spawnSync("netstat", ["-ano"], { encoding: "utf8" });
     const lines = (netstat.stdout ?? "").split(/\r?\n/);
@@ -138,6 +142,7 @@ async function main(): Promise<void> {
   const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
 
   let sha = local;
+  let rebuilt = false;
   if (trackMain && mainIsBehind(local, remote)) {
     if (branch !== "main" && !arg("--force")) {
       throw new Error(`Refusing to leave ${branch} for origin/main without --force.`);
@@ -145,16 +150,20 @@ async function main(): Promise<void> {
     git(["checkout", "main"]);
     git(["reset", "--hard", "origin/main"]);
     sha = git(["rev-parse", "HEAD"]);
+    stopListener();
     npm(["ci"]);
     npm(["run", "build"]);
+    rebuilt = true;
   } else if (!existsSync(join(ROOT, ".next"))) {
+    stopListener();
     npm(["ci"]);
     npm(["run", "build"]);
     sha = git(["rev-parse", "HEAD"]);
+    rebuilt = true;
   }
 
   if (await healthy()) {
-    if (!trackMain || !mainIsBehind(local, remote)) {
+    if (!arg("--install") && !rebuilt && (!trackMain || !mainIsBehind(local, remote))) {
       console.log(`[box] already healthy on :${BOX_PORT} sha=${sha} host=${BOX_HOST_ROLE}`);
       return;
     }
@@ -162,6 +171,7 @@ async function main(): Promise<void> {
 
   writeEnv(sha);
   if (arg("--prepare-only")) {
+    if (arg("--install")) stopListener();
     console.log(`[box] prepared host=${BOX_HOST_ROLE} sha=${sha}`);
     return;
   }
