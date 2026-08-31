@@ -275,7 +275,7 @@ export function Dashboard({
   const integrityOk = run.integrity.ok && !tamper;
 
   return (
-    <div className="min-h-full bg-[radial-gradient(circle_at_top,oklch(0.22_0.02_80),transparent_32%)]">
+    <div className="min-h-full bg-[radial-gradient(circle_at_top_left,oklch(0.22_0.03_328),transparent_34%),radial-gradient(circle_at_top_right,oklch(0.22_0.03_195),transparent_34%)]">
       <header className="border-b border-border/80 bg-background/80 backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-5 sm:px-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-2">
