@@ -43,6 +43,20 @@ jobs:
       # (HamRadio08/ai-trading-agents) on every one of its workflows.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
+      # Stacked-PR CI (GitHub preview feature): a workflow triggers once per PR in a
+      # stack, each evaluated as if it targeted `main` directly. `stack` metadata is
+      # only present when the PR belongs to one — no-op otherwise. This step is
+      # informational only: it does NOT skip typecheck/lint/test/build at any stack
+      # position. The header comment above is explicit that all four legs are
+      # REQUIRED and "none of them may be made advisory without replacing the
+      # coverage" — a stack position isn't a substitute for running the actual
+      # invariant checks against that PR's own content before it merges.
+      - name: Show stack info
+        if: github.event.pull_request.stack != null
+        run: |
+          echo "Stack base ref: ${{ github.event.pull_request.stack.base.ref }}"
+          echo "PR ${{ github.event.pull_request.stack.position }} of ${{ github.event.pull_request.stack.size }} in the stack"
+
       # SHA-pinned (2026-08-28): digest verified against the upstream repo via
       # `git ls-remote --tags https://github.com/actions/setup-node` — v5 and v5.0.0
       # are lightweight tags on this commit, so the tag hash IS the commit hash.
