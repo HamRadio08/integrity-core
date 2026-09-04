@@ -84,6 +84,13 @@ cross-site browser requests are rejected via `Sec-Fetch-Site`/`Origin` checks, e
 endpoint has a process-wide rate budget, and `/api/audit/verify` enforces an 8 MB
 payload cap plus structural validation before anything reaches `verifyIntegrity`.
 
+`GET /api/audit/receipt` is the dissemination surface: a self-contained attestation
+receipt carrying the sealed run **and the bars behind it**, POST-able straight back into
+`/api/audit/verify` for a full replay. Every other read strips bars, so the published run
+alone can only be checked for consistency — the receipt is what makes the replay guarantee
+testable by someone who is not this process. The desk exercises both paths itself from the
+Integrity tab (`Re-verify through the public API`) and shows the two verdicts side by side.
+
 Two optional env flags:
 
 - `AUDIT_TAMPER_ENABLED` — the tamper lab (UI tab + `/api/audit/tamper`) runs only in
@@ -99,8 +106,16 @@ Two optional env flags:
 
 - Hash-chained records; each gate evaluation has its own digest
 - Replay of sealed bars + config + prior link reproduces the record digest
+- The chain must be rooted in the protocol genesis — a book resealed from a caller's own root is refused, not verified
+- A record's sealed `index` must be its position in the chain, checked without bars
+- An empty payload is refused rather than passing every check for want of anything to test
 - No look-ahead: indicators at bar *i* use only closes `0..i`
 - Kill attribution is the first `FAIL`
 - Role-contract bands flag live drift without calling a drifted book "tampered"
+
+What this deliberately does **not** prove: these digests are unsigned, so a green
+`/api/audit/verify` means *this book is self-consistent and protocol-rooted* — not *this desk
+produced it*. Read the `replay` row too: without bars it degrades to a warn, and a warn does not
+clear `ok`. See `docs/audits/2026-09-04-system-integrity-audit.md`.
 
 The design contract (7 / 49 / 18 / 18 / 4) is the intended sequential shape. A live liquid book can sit slightly outside those bands; that is a watch, not a broken seal.

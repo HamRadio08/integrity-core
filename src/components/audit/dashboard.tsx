@@ -6,9 +6,11 @@ import {
   AlertTriangle,
   CheckCircle2,
   LoaderCircle,
+  Download,
   RefreshCw,
   Shield,
   ShieldAlert,
+  ShieldCheck,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +40,7 @@ import type { LiveDesk } from "@/lib/audit/live";
 import type { DeskHealth } from "@/lib/box/host";
 import type { PaperBook } from "@/lib/paper";
 import type {
+  AttestationReceipt,
   AuditRun,
   Bar,
   CandidateRecord,
@@ -45,6 +48,7 @@ import type {
   GateId,
   IntegrityReport,
   StrategyBucketId,
+  VerifyResponse,
 } from "@/lib/audit/types";
 import { cn } from "@/lib/utils";
 
@@ -84,6 +88,9 @@ export function Dashboard({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [tamper, setTamper] = useState<IntegrityReport | null>(null);
+  const [verifyBusy, setVerifyBusy] = useState(false);
+  const [publishedVerdict, setPublishedVerdict] = useState<IntegrityReport | null>(null);
+  const [receiptVerdict, setReceiptVerdict] = useState<IntegrityReport | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [detail, setDetail] = useState<{ record: CandidateRecord; bars: Bar[] } | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -256,6 +263,67 @@ export function Dashboard({
       setError(err instanceof Error ? err.message : "Tamper lab failed.");
     } finally {
       setBusy(null);
+    }
+  }
+
+  // The desk grading its own book is the claim; this is the check. Both calls go through the
+  // public verifier the same way an outside reader would, and the pair is the point: the run the
+  // desk PUBLISHES has its bars stripped, so replay degrades to a warn for whoever holds it. The
+  // receipt is the payload that closes that gap. Showing one without the other would overstate
+  // what a reader can confirm.
+  async function reverify() {
+    setVerifyBusy(true);
+    setError(null);
+    setPublishedVerdict(null);
+    setReceiptVerdict(null);
+    try {
+      const bare = (await loadRun("/api/audit/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ run }),
+      })) as VerifyResponse;
+      setPublishedVerdict(bare.report);
+
+      const receipt = (await loadRun("/api/audit/receipt")) as AttestationReceipt;
+      const full = (await loadRun("/api/audit/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ run: receipt.run, barsByCandidate: receipt.barsByCandidate }),
+      })) as VerifyResponse;
+      setReceiptVerdict(full.report);
+      setNotice(
+        `Re-graded run ${receipt.run.runId} through /api/audit/verify. Published payload: ${
+          bare.report.ok ? "consistent" : "REJECTED"
+        }, replay ${bare.report.replayMatched ? "confirmed" : "not answerable without bars"}. Receipt: ${
+          full.report.ok ? "consistent" : "REJECTED"
+        }, replay ${full.report.replayMatched ? "confirmed" : "NOT confirmed"}.`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Re-verification failed.");
+    } finally {
+      setVerifyBusy(false);
+    }
+  }
+
+  async function downloadReceipt() {
+    setVerifyBusy(true);
+    setError(null);
+    try {
+      const receipt = (await loadRun("/api/audit/receipt")) as AttestationReceipt;
+      const blob = new Blob([JSON.stringify(receipt, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `attestation-${receipt.run.runId}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setNotice(
+        `Receipt for run ${receipt.run.runId} saved. It carries the sealed bars, so the holder can POST it to /api/audit/verify and get a full replay — not just a chain check.`,
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Receipt download failed.");
+    } finally {
+      setVerifyBusy(false);
     }
   }
 
@@ -629,6 +697,54 @@ export function Dashboard({
 
           <TabsContent value="integrity" className="pt-4">
             <div className="grid gap-3">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Independent re-grade</CardTitle>
+                  <CardDescription>
+                    The rows below this card are the desk marking its own homework — the book was
+                    sealed and graded in the same process. This runs the payload back through the
+                    public verifier (<span className="font-mono">POST /api/audit/verify</span>) the
+                    way an outside reader would, twice: once with the run the desk publishes, once
+                    with the receipt that carries the sealed bars. The difference between them is
+                    exactly what a reader can and cannot confirm on their own.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" onClick={() => void reverify()} disabled={verifyBusy}>
+                      {verifyBusy ? <LoaderCircle className="animate-spin" /> : <ShieldCheck />}
+                      Re-verify through the public API
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => void downloadReceipt()}
+                      disabled={verifyBusy}
+                    >
+                      <Download />
+                      Download receipt
+                    </Button>
+                  </div>
+                  {publishedVerdict || receiptVerdict ? (
+                    <div className="grid gap-2 md:grid-cols-2">
+                      <VerdictPanel
+                        title="Published run"
+                        source="GET /api/audit — bars stripped"
+                        report={publishedVerdict}
+                      />
+                      <VerdictPanel
+                        title="Receipt"
+                        source="GET /api/audit/receipt — run + sealed bars"
+                        report={receiptVerdict}
+                      />
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Not re-graded this session. The verdict below is the desk&apos;s own.
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
               {run.integrity.checks.map((check) => (
                 <Alert key={check.id} variant={check.severity === "fail" ? "destructive" : "default"}>
                   {check.severity === "fail" ? <AlertTriangle /> : <CheckCircle2 />}
@@ -778,6 +894,62 @@ function PumpCard({ run, onInspect }: { run: AuditRun; onInspect: () => void }) 
         />
       </CardContent>
     </Card>
+  );
+}
+
+function VerdictPanel({
+  title,
+  source,
+  report,
+}: {
+  title: string;
+  source: string;
+  report: IntegrityReport | null;
+}) {
+  if (!report) {
+    return (
+      <div className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
+        {title} — pending.
+      </div>
+    );
+  }
+  const notable = report.checks.filter((check) => check.severity !== "pass");
+  return (
+    <div className="space-y-2 rounded-lg border p-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-medium">{title}</p>
+        <Badge variant={report.ok ? "secondary" : "destructive"}>
+          {report.ok ? "consistent" : "rejected"}
+        </Badge>
+      </div>
+      <p className="font-mono text-[10px] text-muted-foreground">{source}</p>
+      <p className="text-xs">
+        Replay{" "}
+        <span className={cn(report.replayMatched ? "text-emerald-400" : "text-amber-400")}>
+          {report.replayMatched ? "confirmed from sealed bars" : "not answerable — no bars in this payload"}
+        </span>
+        .
+      </p>
+      {notable.length === 0 ? (
+        <p className="text-xs text-muted-foreground">Every check passed.</p>
+      ) : (
+        <ul className="space-y-1">
+          {notable.map((check) => (
+            <li key={check.id} className="text-xs">
+              <span
+                className={cn(
+                  "font-mono",
+                  check.severity === "fail" ? "text-rose-400" : "text-amber-400",
+                )}
+              >
+                {check.severity} {check.id}
+              </span>{" "}
+              <span className="text-muted-foreground">{check.detail}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
