@@ -15,6 +15,7 @@ import { POST as verifyPost } from "./verify/route";
 import { POST as scanPost } from "./scan/route";
 import { POST as refreshPost } from "./refresh/route";
 import { GET as candidateGet } from "./candidate/[id]/route";
+import { GET as receiptGet } from "./receipt/route";
 import { GET as liveGet } from "./live/route";
 import { resetLiveCache } from "@/lib/audit/live";
 import { GET as paperGet, POST as paperPost } from "./paper/route";
@@ -244,6 +245,78 @@ describe("POST /api/audit/verify", () => {
     expect(response.status).toBe(200);
     const payload = await response.json();
     expect(payload.ok).toBe(true);
+  });
+});
+
+describe("GET /api/audit/receipt", () => {
+  const receiptGetRequest = (headers: Record<string, string> = {}) =>
+    receiptGet(new Request("http://127.0.0.1:43173/api/audit/receipt", { headers }));
+
+  it("emits a self-contained receipt: the claim plus the evidence behind it", async () => {
+    const response = await receiptGetRequest();
+    expect(response.status).toBe(200);
+    const receipt = await response.json();
+    expect(receipt.schemaVersion).toBe(1);
+    expect(receipt.protocol).toBe("stack-attestation/v1");
+    expect(receipt.verifyWith).toContain("/api/audit/verify");
+    // Every sealed record must ship the bars it was sealed from, or the holder is back to
+    // taking the desk's word for the replay.
+    expect(receipt.run.records.length).toBeGreaterThan(50);
+    for (const record of receipt.run.records) {
+      expect(Array.isArray(receipt.barsByCandidate[record.candidateId])).toBe(true);
+    }
+  });
+
+  it("round-trips through the public verifier to a FULL replay", async () => {
+    // The whole reason the receipt exists: an outside holder POSTs it back and gets the replay
+    // answered, not warned about.
+    const receipt = await (await receiptGetRequest()).json();
+    const response = await verifyPost(
+      jsonPost("/api/audit/verify", {
+        run: receipt.run,
+        barsByCandidate: receipt.barsByCandidate,
+      }),
+    );
+    expect(response.status).toBe(200);
+    const payload = await response.json();
+    expect(payload.ok).toBe(true);
+    expect(payload.report.replayMatched).toBe(true);
+    expect(payload.report.checks.find((check: { id: string }) => check.id === "replay")?.severity).toBe(
+      "pass",
+    );
+  });
+
+  it("documents the gap: the published run alone cannot answer the replay question", async () => {
+    // publicRun strips barsByCandidate, so this is the payload every reader of GET /api/audit
+    // actually holds. Chain, order, attribution, position, root and attestation all verify —
+    // replay does not, and the report must say so rather than implying otherwise.
+    const bundle = getDemoBundle();
+    const response = await verifyPost(jsonPost("/api/audit/verify", { run: publicRun(bundle) }));
+    const payload = await response.json();
+    expect(payload.ok).toBe(true);
+    expect(payload.report.replayMatched).toBe(false);
+    expect(payload.report.checks.find((check: { id: string }) => check.id === "replay")?.severity).toBe(
+      "warn",
+    );
+    expect(payload.report.checks.find((check: { id: string }) => check.id === "hash-chain")?.severity).toBe(
+      "pass",
+    );
+  });
+
+  it("carries the same request-boundary guards as every other audit route", async () => {
+    const cross = await receiptGetRequest({ "sec-fetch-site": "cross-site" });
+    expect(cross.status).toBe(403);
+  });
+
+  it("spends its own rate budget rather than sharing another endpoint's", async () => {
+    // capacity 3: the receipt is ~4x the size of any other response, so it is deliberately the
+    // tightest read budget on the desk.
+    expect(consumeRateLimit("receipt", 0)).toBe(true);
+    expect(consumeRateLimit("receipt", 0)).toBe(true);
+    expect(consumeRateLimit("receipt", 0)).toBe(true);
+    expect(consumeRateLimit("receipt", 0)).toBe(false);
+    // Other endpoints are untouched by that exhaustion.
+    expect(consumeRateLimit("verify", 0)).toBe(true);
   });
 });
 

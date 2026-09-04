@@ -29,8 +29,9 @@ the single source of truth; the Cursor Origin copy of this repo is stale and was
 | A2 | 🔴 | The chain root is caller-supplied. A book resealed from **any** genesis verified fully green | **Fixed** |
 | A3 | 🟡 | An **empty** record set verified fully green — every check true for want of anything to test | **Fixed** |
 | A4 | 🟡 | Sealed `record.index` was checked only by `replay`, which needs bars the API strips | **Fixed** |
-| A5 | 🟡 | `POST /api/audit/verify` has **no caller** in the product | Reported, not changed |
+| A5 | 🟡 | `POST /api/audit/verify` has **no caller** in the product | **Owned** |
 | A6 | 🟢 | `ok: true` without bars means *internally consistent*, not *replayed* | By design; stated here |
+| A7 | 🔴 | The run the desk **publishes** carries no bars, so nobody but the desk can replay it | **Fixed** |
 
 ---
 
@@ -144,17 +145,71 @@ signal.
 
 ---
 
-## A5 — `/api/audit/verify` has no caller 🟡
+## A5 — `/api/audit/verify` had no caller 🟡 → owned
 
-Grep across `src/` finds no client. The dashboard calls `refresh`, `scan`, `tamper`, `live`,
-`paper`, `candidate/[id]`, and `health` — never `verify`. It is nonetheless a public POST that
-accepts 8 MB and replays up to 10,000 records × 10,000 bars per request.
+Grep across `src/` found no client. The dashboard called `refresh`, `scan`, `tamper`, `live`,
+`paper`, `candidate/[id]`, and `health` — never `verify`. It was nonetheless a public POST
+accepting 8 MB and replaying up to 10,000 records × 10,000 bars per request.
 
-Not changed, and not recommended for deletion: it is documented as a public surface in
-`README.md`, `README_STRUCTURE.md`, and `RISK_FRAMEWORK_EXAMPLE.md`, and its rate budget
-(6 burst / 12 per minute) already bounds the cost. **Flagged so the decision is deliberate:**
-either give it a caller or retire it, but it should not stay an unowned compute surface by
-default. Operator call, not an agent call.
+**Resolution (operator decision, 2026-09-04): give it a caller, not a retirement.** The owner is
+the desk itself, and the reason is not tidiness — it is evaluator independence. `run.integrity` is
+computed inside `buildAttestedRun`, so the process that seals the book is also the process that
+grades it. `/api/audit/verify` is the only path that re-grades a run from outside that process,
+through the same public surface a third party would use.
+
+The **Integrity** tab now carries a `Re-verify through the public API` control that POSTs to
+`/api/audit/verify` **twice** and renders both verdicts side by side:
+
+| Payload | Source | What it settles |
+|---|---|---|
+| Published run | `GET /api/audit` — 273 KB, bars stripped | chain, order, attribution, position, root, attestation. **Replay: warn.** |
+| Receipt | `GET /api/audit/receipt` — 1.16 MB, bars attached | all of the above **plus replay: pass** |
+
+Both sizes are measured against the committed tape and sit inside the 8 MB cap. Showing only the
+second would overstate what a reader can confirm; showing only the first would hide that the desk
+can close the gap. The pair is the honest statement.
+
+---
+
+## A7 — the desk published a run nobody else could replay 🔴
+
+Surfaced while wiring A5. `publicRun` strips `barsByCandidate` from **every** response, so the run
+a reader gets from `GET /api/audit` cannot answer the replay question — the headline forensic
+guarantee in the README. Measured on the round-trip:
+
+```
+self-reported   integrity.ok: true | replayMatched: true
+independent     integrity.ok: true | replayMatched: false   ← published payload, no bars
+```
+
+The verifier was behaving correctly and reporting honestly (`replay: warn`, per A6). The defect
+was upstream: **the one endpoint whose entire job is letting someone else check the work was
+unanswerable in full by anyone outside the process.** "Replay reproduces every digest" was a claim
+the desk could make and no reader could test.
+
+**Fix.** New `GET /api/audit/receipt` — the dissemination surface. It emits the claim *and the
+evidence behind it*:
+
+```json
+{
+  "schemaVersion": 1,
+  "protocol": "stack-attestation/v1",
+  "issuedAt": "…",
+  "verifyWith": "POST { run, barsByCandidate } to /api/audit/verify",
+  "note": "run.integrity is the desk's own claim … recompute the verdict from the evidence.",
+  "run": { … },
+  "barsByCandidate": { … }
+}
+```
+
+Self-contained and POST-able straight back into `/api/audit/verify` for a full `replay: pass`.
+Same request-boundary guards as every other route, on the tightest read budget on the desk
+(capacity 3, 6/min) because it is ~4× the size of any other response. It reads the active bundle;
+it seals nothing and writes nothing.
+
+Regression coverage asserts all three legs: every sealed record ships its bars, the receipt
+round-trips to `replay: pass`, and the bars-free published run still lands on `replay: warn` —
+the gap is documented in a test rather than left to be rediscovered.
 
 ---
 
@@ -184,6 +239,9 @@ Probed or read end-to-end, no defect found:
 `src/lib/audit/verifier-adversarial.test.ts` — 7 tests. Each is the probe that found the finding,
 inverted into an assertion, including a guard that the desk's own honest call stays fully green.
 
-Full gate at time of writing: `vitest` 91/91, `tsc --noEmit` clean, `eslint --max-warnings 0`
+`src/app/api/audit/routes.test.ts` — 5 added for the receipt surface (shape, full-replay
+round-trip, the documented bars-free gap, guard parity, and its own rate budget).
+
+Full gate at time of writing: `vitest` 96/96, `tsc --noEmit` clean, `eslint --max-warnings 0`
 clean, `npm run attest` green on the committed tape (the `role-contract` warn on
 `volume_confirm` at 24.8% vs a 12–24% band is pre-existing live-tape drift, not a seal defect).

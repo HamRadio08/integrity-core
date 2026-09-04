@@ -17,7 +17,14 @@ import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 //   AUDIT_API_TOKEN — when set, callers that cannot prove browser
 //     same-origin (curl, scripts) must send `Authorization: Bearer <token>`.
 
-export type AuditEndpoint = "refresh" | "scan" | "tamper" | "verify" | "live" | "paper";
+export type AuditEndpoint =
+  | "refresh"
+  | "scan"
+  | "tamper"
+  | "verify"
+  | "live"
+  | "paper"
+  | "receipt";
 
 export type OriginVerdict = "same-origin" | "cross-site" | "unproven";
 
@@ -85,6 +92,10 @@ const BUDGETS: Record<AuditEndpoint, { capacity: number; refillPerSecond: number
   verify: { capacity: 6, refillPerSecond: 12 / 60 },
   live: { capacity: 20, refillPerSecond: 20 / 60 },
   paper: { capacity: 20, refillPerSecond: 20 / 60 },
+  // Tightest of the read surfaces: the receipt carries the sealed bars, so it is an order of
+  // magnitude larger than any other response (~1.2 MB against the committed tape vs ~270 KB
+  // for the bars-free run). Dissemination is deliberate and occasional, not a poll.
+  receipt: { capacity: 3, refillPerSecond: 6 / 60 },
 };
 
 const buckets = new Map<AuditEndpoint, { tokens: number; lastRefillMs: number }>();

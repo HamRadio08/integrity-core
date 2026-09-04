@@ -84,6 +84,13 @@ cross-site browser requests are rejected via `Sec-Fetch-Site`/`Origin` checks, e
 endpoint has a process-wide rate budget, and `/api/audit/verify` enforces an 8 MB
 payload cap plus structural validation before anything reaches `verifyIntegrity`.
 
+`GET /api/audit/receipt` is the dissemination surface: a self-contained attestation
+receipt carrying the sealed run **and the bars behind it**, POST-able straight back into
+`/api/audit/verify` for a full replay. Every other read strips bars, so the published run
+alone can only be checked for consistency — the receipt is what makes the replay guarantee
+testable by someone who is not this process. The desk exercises both paths itself from the
+Integrity tab (`Re-verify through the public API`) and shows the two verdicts side by side.
+
 Two optional env flags:
 
 - `AUDIT_TAMPER_ENABLED` — the tamper lab (UI tab + `/api/audit/tamper`) runs only in
