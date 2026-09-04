@@ -136,6 +136,35 @@ export function verifyIntegrity(input: {
   const genesisDigest = input.genesisDigest ?? GENESIS;
   const order = gateOrder();
 
+  // A chain is only worth as much as the root it hangs from. Every honest producer here seals
+  // against the one protocol constant (`sealUniverse` defaults to it, run.ts passes it
+  // explicitly), but POST /api/audit/verify forwards `run.genesisDigest` straight out of the
+  // request body — so a caller could reseal a wholly fabricated book from a root of their own
+  // and every check below would agree with it, green. Internal consistency is not provenance,
+  // and this is the check that refuses to conflate them.
+  const rootIsProtocol = genesisDigest === GENESIS;
+  checks.push({
+    id: "genesis-root",
+    title: "Chain is rooted in the protocol genesis",
+    severity: rootIsProtocol ? "pass" : "fail",
+    detail: rootIsProtocol
+      ? `Rooted at the stack-attestation/v1 genesis ${GENESIS.slice(0, 12)}.`
+      : `Rooted at ${genesisDigest.slice(0, 12)}, not the protocol genesis ${GENESIS.slice(0, 12)}. A self-consistent chain grown from a caller-chosen root proves only that the payload agrees with itself.`,
+  });
+
+  // The other way a verifier lies is by vacuous truth: with no records every check below passes
+  // for want of anything to test ("All 0 records reseal to their claimed digest") and an empty
+  // payload comes back fully green.
+  const bookPopulated = input.records.length > 0;
+  checks.push({
+    id: "book-populated",
+    title: "There is a book to attest",
+    severity: bookPopulated ? "pass" : "fail",
+    detail: bookPopulated
+      ? `${input.records.length} sealed records submitted for verification.`
+      : "No records were submitted. Every check below is vacuously true; an empty payload is not a verified run.",
+  });
+
   const chainBreaks: number[] = [];
   input.records.forEach((record, index) => {
     const expectedPrev = index === 0 ? genesisDigest : input.records[index - 1].recordDigest;
@@ -159,6 +188,24 @@ export function verifyIntegrity(input: {
       uniqueBreaks.length === 0
         ? `All ${input.records.length} records reseal to their claimed digest and point at the prior link.`
         : `Chain break at record index ${uniqueBreaks.join(", ")}. Treat the run as contaminated.`,
+  });
+
+  // `index` is sealed INSIDE the record body, so a book whose positions were rewritten and then
+  // re-linked reseals cleanly and the chain check cannot see it. Replay can — it feeds
+  // record.index back into sealRecord — but replay needs bars, and the run GET /api/audit hands
+  // out has them stripped by publicRun. So on the payload shape that actually round-trips
+  // through the API, position was checked by nothing. This is the bars-free positional check.
+  const positionBreaks = input.records
+    .map((record, index) => (record.index === index ? null : index))
+    .filter((index): index is number => index !== null);
+  checks.push({
+    id: "record-position",
+    title: "Sealed index matches position in the chain",
+    severity: positionBreaks.length === 0 ? "pass" : "fail",
+    detail:
+      positionBreaks.length === 0
+        ? "Every record's sealed index is its position in the submitted order."
+        : `${positionBreaks.length} records carry a sealed index that is not their position (first at ${positionBreaks[0]}). The book was reordered or re-indexed after sealing.`,
   });
 
   const shortCircuitFails = input.records.filter((record) => !sequentialOk(record));
@@ -302,6 +349,12 @@ export function verifyIntegrity(input: {
           .join(" "),
   });
 
+  // Three outcomes, not two. The old shape collapsed "no digest was claimed" into the pass
+  // branch, so a payload that simply omitted `attestationDigest` was told "Attestation <x>
+  // reseals from the live payload" — a match against nothing, printing back a digest the
+  // verifier had just computed from the caller's own input. `replay` already models the
+  // missing-input case as a warn; attestation now agrees with it.
+  const attestationTitle = "Run attestation digest matches the sealed payload";
   if (input.seed !== undefined && input.startedAt) {
     const claimed = attestRun({
       records: input.records,
@@ -310,27 +363,45 @@ export function verifyIntegrity(input: {
       startedAt: input.startedAt,
       genesisDigest,
     });
-    if (input.expectedAttestation && input.expectedAttestation !== claimed.attestationDigest) {
+    if (!input.expectedAttestation) {
       checks.push({
         id: "attestation",
-        title: "Run attestation digest matches the sealed payload",
+        title: attestationTitle,
+        severity: "warn",
+        detail: `No attestation digest was submitted, so nothing was compared. The payload recomputes to ${claimed.attestationDigest.slice(0, 12)} — a restatement of the input, not a match against a claim.`,
+      });
+    } else if (input.expectedAttestation !== claimed.attestationDigest) {
+      checks.push({
+        id: "attestation",
+        title: attestationTitle,
         severity: "fail",
         detail: "The attestation digest no longer matches counts, chain head, and config.",
       });
     } else {
       checks.push({
         id: "attestation",
-        title: "Run attestation digest matches the sealed payload",
+        title: attestationTitle,
         severity: "pass",
         detail: `Attestation ${claimed.attestationDigest.slice(0, 12)} reseals from the live payload.`,
       });
     }
+  } else {
+    checks.push({
+      id: "attestation",
+      title: attestationTitle,
+      severity: "warn",
+      detail: "Payload carried no seed/startedAt, so the run attestation could not be recomputed at all.",
+    });
   }
 
   const tamperDetected = checks.some(
     (check) =>
       check.severity === "fail" &&
-      (check.id === "hash-chain" || check.id === "replay" || check.id === "attestation"),
+      (check.id === "hash-chain" ||
+        check.id === "replay" ||
+        check.id === "attestation" ||
+        check.id === "genesis-root" ||
+        check.id === "record-position"),
   );
   const ok = checks.every((check) => check.severity !== "fail");
 
