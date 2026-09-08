@@ -279,6 +279,22 @@ export interface AuditBundle extends AuditRun {
   barsByCandidate: Record<string, Bar[]>;
 }
 
+// The self-contained artifact the desk hands out so someone else can grade its work.
+//
+// `run.integrity` inside it is the desk's own CLAIM — computed by the same process that sealed
+// the book. `records` + `barsByCandidate` are the EVIDENCE. A holder recomputes the verdict from
+// the evidence rather than reading the claim; that is the whole point of shipping bars, which
+// `publicRun` strips from every other response.
+export interface AttestationReceipt {
+  schemaVersion: 1;
+  protocol: "stack-attestation/v1";
+  issuedAt: string;
+  verifyWith: string;
+  note: string;
+  run: AuditRun;
+  barsByCandidate: Record<string, Bar[]>;
+}
+
 export interface VerifyRequest {
   run: AuditRun;
   barsByCandidate?: Record<string, Bar[]>;
