@@ -17,7 +17,7 @@ import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 //   AUDIT_API_TOKEN — when set, callers that cannot prove browser
 //     same-origin (curl, scripts) must send `Authorization: Bearer <token>`.
 
-export type AuditEndpoint = "refresh" | "scan" | "tamper" | "verify" | "live" | "paper";
+export type AuditEndpoint = "refresh" | "scan" | "tamper" | "verify" | "live" | "paper" | "pred15";
 
 export type OriginVerdict = "same-origin" | "cross-site" | "unproven";
 
@@ -83,7 +83,10 @@ const BUDGETS: Record<AuditEndpoint, { capacity: number; refillPerSecond: number
   scan: { capacity: 10, refillPerSecond: 30 / 60 },
   tamper: { capacity: 6, refillPerSecond: 12 / 60 },
   verify: { capacity: 6, refillPerSecond: 12 / 60 },
-  live: { capacity: 20, refillPerSecond: 20 / 60 },
+    live: { capacity: 20, refillPerSecond: 20 / 60 },
+  paper: { capacity: 20, refillPerSecond: 20 / 60 },
+  pred15: { capacity: 20, refillPerSecond: 20 / 60 },
+};
   paper: { capacity: 20, refillPerSecond: 20 / 60 },
 };
 

@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FuturesPanel, MemeLadderPanel, PaperBookPanel, PnlPanel, WatchLanesPanel } from "@/components/audit/desk-panels";
+import { Pred15Panel } from "@/components/audit/pred15-panel";
 import { formatAge, formatNumber, formatPct, formatShare, formatUsd, shortHash } from "@/lib/audit/format";
 import type { LiveDesk } from "@/lib/audit/live";
 import type { DeskHealth } from "@/lib/box/host";
@@ -473,6 +474,7 @@ export function Dashboard({
           <TabsList variant="line" className="w-full justify-start overflow-x-auto">
             <TabsTrigger value="ledger">Ledger</TabsTrigger>
             <TabsTrigger value="paper">Paper book</TabsTrigger>
+            <TabsTrigger value="pred15">PRED15</TabsTrigger>
             <TabsTrigger value="pnl">PnL by strategy</TabsTrigger>
             <TabsTrigger value="futures">Futures</TabsTrigger>
             <TabsTrigger value="watch">CI / watch lanes</TabsTrigger>
@@ -582,6 +584,13 @@ export function Dashboard({
               onTick={() => void refreshPaper(true)}
               onInspect={showPaperSymbol}
               busy={paperBusy}
+            />
+          </TabsContent>
+
+          <TabsContent value="pred15" className="pt-4">
+            <Pred15Panel
+              bootToken={bootToken}
+              liveBtc={live?.spots.find((row) => row.symbol === "BTC")?.usd ?? null}
             />
           </TabsContent>
 
