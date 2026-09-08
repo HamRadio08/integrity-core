@@ -90,7 +90,10 @@ const BUDGETS: Record<AuditEndpoint, { capacity: number; refillPerSecond: number
   scan: { capacity: 10, refillPerSecond: 30 / 60 },
   tamper: { capacity: 6, refillPerSecond: 12 / 60 },
   verify: { capacity: 6, refillPerSecond: 12 / 60 },
-  live: { capacity: 20, refillPerSecond: 20 / 60 },
+    live: { capacity: 20, refillPerSecond: 20 / 60 },
+  paper: { capacity: 20, refillPerSecond: 20 / 60 },
+  pred15: { capacity: 20, refillPerSecond: 20 / 60 },
+};
   paper: { capacity: 20, refillPerSecond: 20 / 60 },
   // Tightest of the read surfaces: the receipt carries the sealed bars, so it is an order of
   // magnitude larger than any other response (~1.2 MB against the committed tape vs ~270 KB

@@ -66,6 +66,8 @@ Tamper lab stays off when `NODE_ENV=production`. `npm start` binds `0.0.0.0` and
 
 Paper agents (`stack-long`, `stack-crypto`, `meme-cleared`) tick on desk load, reseal, and `npm run paper`. They equal-weight long names that cleared the stack and sit in cash when none did. Every fill is `venue=paper`. There is no live order path — `TRADING_MODE=live` is refused.
 
+**PRED15** is a separate review tab for 15-minute BTC Over/Under contracts (Coinbase Predict / Kalshi `KXBTC15M`). It grades clock, strike, z, Φ, and venue odds. Coinbase last is a proxy; settlement is BRTI's 60-second average. Default strip is `NO_BET`. Kalshi is an optional public GET — no API key required, and a signed key never places an order. See `docs/pred15.md`.
+
 The desk also surfaces four measured lanes — none of them invent a number:
 
 - **PnL by strategy** — equal-weight 5d/20d tape returns of sealed names, grouped by kill attribution (and the names that cleared the stack). This is not executed trading P&L.
