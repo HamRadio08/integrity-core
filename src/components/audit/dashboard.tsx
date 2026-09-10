@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   Activity,
   AlertTriangle,
@@ -11,10 +12,11 @@ import {
   Shield,
   ShieldAlert,
   ShieldCheck,
+  ScrollText,
 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
@@ -363,6 +365,13 @@ export function Dashboard({
             <Badge variant="outline" className="h-7 px-3">
               PAPER ONLY
             </Badge>
+            <Link
+              href="/evidence"
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+            >
+              <ScrollText />
+              Evidence ledger
+            </Link>
             <Badge variant={health?.host === "alienware" ? "secondary" : "outline"} className="h-7 px-3 font-mono">
               {health?.host === "alienware" ? "Alienware" : (health?.host ?? "host unknown")}
               {health?.gitSha ? ` · ${shortHash(health.gitSha)}` : ""}

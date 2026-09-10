@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-09-10",
+  "note": "Preregistered evaluations and adversarial audits run against this author's systems. Every entry is code-confirmed: reproduced from probe or runner output, not inferred from reading. Confidence intervals are reproduced as recorded at measurement time. No entry is a trading performance claim.",
+  "gates": [
+    {
+      "id": "block-lane-distill",
+      "title": "Local student vs API primary — block-lane promotion gate",
+      "system": "private trading stack",
+      "preregisteredAt": "2026-07-12",
+      "measuredAt": "2026-08-28",
+      "question": "Does a locally fine-tuned student agree with the API primary closely enough to take the lane?",
+      "gate": {
+        "statistic": "disagreement rate vs API primary",
+        "threshold": 0.05,
+        "direction": "below",
+        "label": "< 0.05"
+      },
+      "arms": [
+        {
+          "label": "trading-qa-7b-l3",
+          "numerator": 64,
+          "denominator": 300,
+          "point": 0.2133,
+          "ci95": [0.1708, 0.2632],
+          "verdict": "FAIL"
+        },
+        {
+          "label": "trading-qa-7b-distill",
+          "numerator": 212,
+          "denominator": 300,
+          "point": 0.7067,
+          "ci95": [0.6528, 0.7553],
+          "verdict": "FAIL"
+        }
+      ],
+      "ciMethod": "Wilson 95%",
+      "nEffective": 300,
+      "runnerErrors": 0,
+      "verdict": "FAIL",
+      "consequence": "Lane stays api_only. Registry: NOT_PROMOTABLE. No retry with these students.",
+      "lesson": "The test population was degenerate. l3 answered decline+low unconditionally for all 300 cases; the primary's confidence split was low 236 / med 45 / high 19, and 45 + 19 = 64 — l3's exact score. l3 IS that constant. A comparator proven live is not a test set proven discriminating: every case had one reference answer, so the test could not distinguish a competent model from a stuck one, and actively rewarded the stuck one by ranking it first.",
+      "reopenCondition": "A test set whose reference answers carry more than one decision class with meaningful mass, re-run at the preregistered n against the same 0.05 gate.",
+      "caseStudy": null
+    }
+  ],
+  "corrections": [
+    {
+      "id": "spread-gate-inflation",
+      "title": "Raw gate-rejection counts vs deduplicated opportunities",
+      "system": "private trading stack",
+      "measuredAt": "2026-08-28",
+      "question": "The EMA-spread entry gate showed as roughly 80% of all entry blocks. Is it blocking too much?",
+      "before": { "label": "raw blocks logged", "value": 1248643 },
+      "after": { "label": "effective opportunities", "value": 1058 },
+      "factor": 1180,
+      "shareBefore": 0.8,
+      "shareAfter": 0.22,
+      "sample": { "n": 23697, "days": 66 },
+      "verdict": "KEEPER",
+      "lesson": "A gate's raw rejection count is not the number of opportunities it cost you. Signals re-fire every sub-tick while a condition holds, so one blocked setup logs thousands of rows. Deduplicated, spread drops from dominating the funnel to roughly 22% — tied with three other gates. Inflation is non-uniform across gates (30x to 1,180x), so it cannot be divided out: a gate's rank changes, not just its magnitude.",
+      "reopenCondition": "A dedup-corrected funnel in which spread's effective share leads, or an end-aligned ablation whose marginal-trade bootstrap CI excludes zero against the gate.",
+      "caseStudy": null
+    }
+  ],
+  "audits": [
+    {
+      "id": "verifier-adversarial-2026-09-04",
+      "title": "Does verifyIntegrity actually perform the checks it reports?",
+      "system": "integrity-core (this repository)",
+      "measuredAt": "2026-09-04",
+      "method": "Adversarial probes constructed against the live demo bundle and run through verifyIntegrity directly — the same call POST /api/audit/verify makes. Re-verified over HTTP.",
+      "headline": "117 records resealed from sha256(\"attacker/genesis\") verified fully green — chain, replay and attestation all pass.",
+      "findings": [
+        { "ref": "A1", "severity": "critical", "summary": "attestation reported pass on a payload carrying no attestation digest, echoing back a digest the verifier had just computed from the caller's own input", "status": "Fixed" },
+        { "ref": "A2", "severity": "critical", "summary": "chain root was caller-supplied; a book resealed from any genesis verified fully green", "status": "Fixed" },
+        { "ref": "A7", "severity": "critical", "summary": "the run the desk publishes carries no bars, so nobody outside the process could replay it", "status": "Fixed" },
+        { "ref": "A3", "severity": "warning", "summary": "an empty record set verified fully green — every check true for want of anything to test", "status": "Fixed" },
+        { "ref": "A4", "severity": "warning", "summary": "sealed record.index was read only by replay, which needs bars the public payload strips", "status": "Fixed" },
+        { "ref": "A5", "severity": "warning", "summary": "POST /api/audit/verify had no caller anywhere in the product", "status": "Owned" },
+        { "ref": "A6", "severity": "ok", "summary": "ok: true without bars means internally consistent, not replayed", "status": "By design — stated in limitations" }
+      ],
+      "shipped": [
+        "genesis-root, book-populated and record-position checks; attestation goes three-way (pass / fail / warn-nothing-compared)",
+        "GET /api/audit/receipt — run plus sealed bars, self-contained, POST-able back for a full replay: pass (1.16 MB with bars vs 273 KB without; 8 MB cap)",
+        "src/lib/audit/verifier-adversarial.test.ts — the probes kept as regression tests, each failing against the pre-fix verifier"
+      ],
+      "verdict": "FIXED",
+      "reopenCondition": "Any check added to verifyIntegrity without a matching adversarial probe that fails against the verifier as it stood before that check existed.",
+      "caseStudy": "docs/case-studies/01-forged-genesis.md",
+      "link": "https://github.com/HamRadio08/integrity-core/pull/18"
+    },
+    {
+      "id": "dead-but-believed-live-2026-06-18",
+      "title": "Do features that report healthy actually produce output?",
+      "system": "private trading stack",
+      "measuredAt": "2026-06-18",
+      "method": "Census of features whose enable-flag was true, asking for each whether it had ever produced a non-neutral return, a written row, or a non-empty snapshot.",
+      "headline": "Three independent features were enabled, import-clean, zero-error — and had produced no effect for their entire enabled life.",
+      "findings": [
+        { "ref": "F1", "severity": "critical", "summary": "a stop-loss modifier caught every exception and returned the identity multiplier 1.0 with no log; when its upstream feed was down the feature was inert and indistinguishable from healthy", "status": "Fixed" },
+        { "ref": "F2", "severity": "critical", "summary": "a counterfactual tracker wrote zero rows due to a capacity-vs-rate eviction mismatch; the KILLING WINNERS safety alert iterated an always-empty dict and could not fire", "status": "Fixed" },
+        { "ref": "F3", "severity": "warning", "summary": "empty tracker state was consumed downstream as 'gates verified safe' — absence read as a passing verdict", "status": "Fixed" }
+      ],
+      "shipped": [
+        "guard-AND-LOG at every fallback call site — a swallow-to-neutral path that does not announce itself is a path nobody audits",
+        "data-presence guard before any 'looks safe' conclusion: absence resolves to UNKNOWN, never to PASS",
+        "a standing feature-health guard that asks, for every feature claiming to be live, whether it produced output — routed to the existing operator alerter"
+      ],
+      "verdict": "CLASS CLOSED",
+      "reopenCondition": "A feature reaching production whose health signal is its enable-flag rather than its output, or any fallback path added without a warning-level log.",
+      "caseStudy": "docs/case-studies/02-fail-open-on-feed-loss.md",
+      "link": null
+    },
+    {
+      "id": "constant-signal-2026-09-06",
+      "title": "Can a monitor's output vary with the thing it observes?",
+      "system": "private trading stack (monitoring layer)",
+      "measuredAt": "2026-09-06",
+      "method": "Measured a monitoring guard's journal across two repositories over 33.26 days, counting rows that carried signal versus rows identical to their predecessor.",
+      "headline": "31 of 33 rows (93.9%) were identical no-ops; zero rows carried signal after 2026-08-05. Six commits existed only to commit the previous push's row.",
+      "findings": [
+        { "ref": "C1", "severity": "warning", "summary": "the journal was tracked in the repo where the gate never applies and gitignored in the repo where it does — versioned where it was noise, ignored where it was signal", "status": "Fixed" },
+        { "ref": "C2", "severity": "warning", "summary": "a monitor emitting the same row every run reads as healthy and carries exactly as much information as one that never fires", "status": "Fixed" }
+      ],
+      "shipped": [
+        "the rule: an output that cannot vary with the thing it observes is not evidence about that thing",
+        "heartbeat floors on suppression rules — zero trips over N periods forces an assertion of liveness rather than an assumption of it",
+        "diff the last two outputs before believing either; identical is a finding"
+      ],
+      "verdict": "CLASS CLOSED",
+      "reopenCondition": "A monitor shipped without a test that makes its output differ under a changed observation, or a suppression rule shipped without a heartbeat floor.",
+      "caseStudy": "docs/case-studies/03-silence-is-an-alert.md",
+      "link": null
+    }
+  ]
+}

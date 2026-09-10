@@ -1,3 +1,14 @@
+> **⚠️ SUPERSEDED — historical.** This file planned a *separate* sanitised public repo built from
+> synthetic data, with the real universe and sealed tape held back. That is not what happened:
+> this repository went public directly, with `data/live-tape.json` (real public marks for the real
+> 117-name book) committed. The live posture is therefore the opposite of the "what stays out"
+> table below, and deliberately so — the tape is public venue data, and a desk that ships a
+> fabricated tape cannot demonstrate the thing it exists to demonstrate.
+>
+> Kept for the record, not as guidance. The current statements of what this repo does and does not
+> claim are [`README.md`](README.md) and [`docs/limitations.md`](docs/limitations.md); those two
+> govern. Nothing below is a live rule.
+
 # Public Repo Template — Structure Guide
 
 This is a template for building a **public, hiring/collaboration-safe** version of this

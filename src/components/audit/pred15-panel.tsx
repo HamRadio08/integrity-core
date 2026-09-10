@@ -69,9 +69,16 @@ export function Pred15Panel({
   }
 
   useEffect(() => {
-    void refresh();
+    // The first poll is scheduled rather than called inline: refresh() sets busy
+    // state before its first await, and doing that synchronously in an effect
+    // body cascades renders. Scheduling it keeps the mount fetch and the interval
+    // on the same path, and the timeout is cancelled on unmount like the interval.
+    const kickoff = window.setTimeout(() => void refresh(), 0);
     const timer = window.setInterval(() => void refresh(), 20_000);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearTimeout(kickoff);
+      window.clearInterval(timer);
+    };
     // Manual fields are read at click/interval time.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bootToken]);
