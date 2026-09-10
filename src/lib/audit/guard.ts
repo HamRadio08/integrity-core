@@ -24,7 +24,8 @@ export type AuditEndpoint =
   | "verify"
   | "live"
   | "paper"
-  | "receipt";
+  | "receipt"
+  | "pred15";
 
 export type OriginVerdict = "same-origin" | "cross-site" | "unproven";
 

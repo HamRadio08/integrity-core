@@ -10,6 +10,29 @@ The universe screen runs first. Liquidity and tier are properties of the *asset*
 
 This repo does **not** invent OHLC. The book is 117 live names (crypto + liquid equities + a few crypto-beta stocks) plus a Coinbase/CoinGecko mark-to-market overlay. Bitcoin is scored on the real print — through $75,000, around $78.5k after a ~25% week.
 
+> **Start here if you are evaluating this repository.**
+>
+> | | |
+> |---|---|
+> | **What it proves** | that a five-gate chain was applied honestly, in order, to real venue tape — and that the record can be re-checked by someone who is not this process |
+> | **What it does not prove** | authorship. The digests are **unsigned**: green means *self-consistent and protocol-rooted*, not *this desk produced it* |
+> | **The most useful thing here** | [the audit where this desk's own verifier was caught reporting four checks it never performed](docs/case-studies/01-forged-genesis.md) — including a book resealed from a forged genesis that verified fully green |
+> | **Evidence ledger** | the `/evidence` route (`npm run dev`), backed by [`data/evidence-ledger.json`](data/evidence-ledger.json) — every preregistered gate and adversarial audit, with the verdict and the condition that would reopen it. Most are failures |
+> | **Limitations** | [`docs/limitations.md`](docs/limitations.md) — read before believing anything above |
+> | **Trading claims** | none. Paper only; `TRADING_MODE=live` is refused in code |
+> | **Authorship** | the code is written by AI agents to specification. See [Authorship](#authorship) |
+
+## Case studies
+
+Three systems, one question: *did the check actually run — and could its output have been
+different?* Each of these is a failure found in the author's own work.
+
+| | Case | What it turned out to be |
+|---|---|---|
+| 01 | [The verifier reported four checks it never performed](docs/case-studies/01-forged-genesis.md) | 117 records resealed from `sha256("attacker/genesis")` verified fully green. Internal consistency is not provenance, and a hash chain cannot tell you which one you have. |
+| 02 | [A safety feature that was enabled, error-free, and dead](docs/case-studies/02-fail-open-on-feed-loss.md) | `except: return 1.0` with no log. Feed down ⇒ silently no adjustment, for the feature's entire life. A silent neutral return is indistinguishable from a healthy path. |
+| 03 | [Silence is an alert, and so is a constant](docs/case-studies/03-silence-is-an-alert.md) | An alarm that could not fire, and a monitor that fired 31 identical rows out of 33. An output that cannot vary with the thing it observes is not evidence about that thing. |
+
 ## How the stack treated this BTC pump
 
 As of the sealed tape (22 Aug 2026):
@@ -121,3 +144,35 @@ produced it*. Read the `replay` row too: without bars it degrades to a warn, and
 clear `ok`. See `docs/audits/2026-09-04-system-integrity-audit.md`.
 
 The design contract (7 / 49 / 18 / 18 / 4) is the intended sequential shape. A live liquid book can sit slightly outside those bands; that is a watch, not a broken seal.
+
+Every limitation above is enumerated, with the condition that would lift each one, in
+[`docs/limitations.md`](docs/limitations.md).
+
+## Evidence ledger
+
+`/evidence` renders every preregistered evaluation and adversarial audit behind this work:
+the gate that was fixed before the measurement, the measurement, the verdict, and — per the
+standing rule that a closed item must carry the condition that reopens it — what would bring
+each verdict back.
+
+Most entries are failures, including a preregistered model-promotion gate that both candidates
+missed by more than an order of magnitude, and the discovery that the test population itself was
+degenerate. A ledger that only records wins is a brochure.
+
+The page reads `data/evidence-ledger.json`, which is validated at load: a point estimate that
+does not reproduce its own counts, an interval that does not contain its point, an audit that
+reports no findings, or an empty ledger all refuse to render rather than render as clean. That
+check exists because of case study 03.
+
+## Authorship
+
+**The code in this repository is written by AI agents — primarily Claude Code — to
+specification. The author does not hand-write it.**
+
+The claimed skill is specification, verification, governance, and honest evaluation of
+AI-produced work: deciding what to build, defining what would falsify it, and catching the
+cases where the machine reported a check it never performed. The case studies above are the
+evidence for that claim, and every one of them is a failure found in the author's own systems.
+
+Stated here rather than left to be discovered. A reader should never be able to catch what the
+document could have said itself.

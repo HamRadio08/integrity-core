@@ -74,7 +74,6 @@ export function windowBounds(now = new Date(), timeZone = "America/New_York"): {
   const day = pick("day");
   const hour = pick("hour");
   const minute = pick("minute");
-  const second = pick("second");
   const floorMin = Math.floor(minute / 15) * 15;
   const startUtcGuess = Date.UTC(year, month - 1, day, hour, floorMin, 0);
   // Interpret civil ET parts as an instant by offsetting the current TZ delta.
