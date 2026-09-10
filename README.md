@@ -17,6 +17,7 @@ This repo does **not** invent OHLC. The book is 117 live names (crypto + liquid 
 > | **What it proves** | that a five-gate chain was applied honestly, in order, to real venue tape — and that the record can be re-checked by someone who is not this process |
 > | **What it does not prove** | authorship. The digests are **unsigned**: green means *self-consistent and protocol-rooted*, not *this desk produced it* |
 > | **The most useful thing here** | [the audit where this desk's own verifier was caught reporting four checks it never performed](docs/case-studies/01-forged-genesis.md) — including a book resealed from a forged genesis that verified fully green |
+> | **How to check me** | `GET /api/audit/receipt` returns the claim **and the evidence** — the sealed run plus the bars behind it. POST it straight back into `/api/audit/verify` and replay it yourself. See [Refute this desk](#refute-this-desk) |
 > | **Evidence ledger** | the `/evidence` route (`npm run dev`), backed by [`data/evidence-ledger.json`](data/evidence-ledger.json) — every preregistered gate and adversarial audit, with the verdict and the condition that would reopen it. Most are failures |
 > | **Limitations** | [`docs/limitations.md`](docs/limitations.md) — read before believing anything above |
 > | **Trading claims** | none. Paper only; `TRADING_MODE=live` is refused in code |
@@ -163,6 +164,58 @@ The page reads `data/evidence-ledger.json`, which is validated at load: a point 
 does not reproduce its own counts, an interval that does not contain its point, an audit that
 reports no findings, or an empty ledger all refuse to render rather than render as clean. That
 check exists because of case study 03.
+
+## Refute this desk
+
+The forensic claim is *replay of sealed bars + config + prior link reproduces the record digest*.
+Before 2026-09-04 that claim was untestable by anyone outside this process: every published read
+stripped the bars, so an outside checker got `replay: warn` and could only confirm internal
+consistency. A guarantee that only its author can check is a marketing claim wearing a hash.
+
+`GET /api/audit/receipt` is the fix. It emits the run **and the evidence** — sealed bars included,
+`schemaVersion: 1`, self-contained — and it POSTs straight back into `/api/audit/verify` for a full
+`replay: pass`.
+
+```bash
+npm run build && PORT=43173 npm start          # or npm run dev
+
+# 1. take the receipt: the claim plus the bars behind it
+curl -s http://127.0.0.1:43173/api/audit/receipt > receipt.json
+
+# 2. hand it back and make the desk prove the claim to you
+curl -s -X POST http://127.0.0.1:43173/api/audit/verify \
+  -H 'Content-Type: application/json' --data @receipt.json > verdict.json
+
+# 3. read the row that matters, not just the headline
+python3 -c "import json;r=json.load(open('verdict.json'))['report'];print('ok',r['ok'],'| replayMatched',r['replayMatched']);print([c for c in r['checks'] if c['id']=='replay'][0]['severity'])"
+```
+
+Against the committed tape that prints `ok True | replayMatched True` and `pass`, over 117 sealed
+records from a 1.16 MB receipt (the bars-free run is 273 KB; the payload cap is 8 MB).
+
+**Read `report.replayMatched` and the `replay` check's `severity`, not just `report.ok`.** Three
+outcomes are meaningful:
+
+| `replay` severity | It means |
+|---|---|
+| `pass` | every sealed digest was reproduced from the bars you were given |
+| `warn` | you sent a payload with no bars — nothing was replayed, and `ok` is not cleared |
+| `fail` | the bars and the digests disagree. That is a tamper signal |
+
+This is the finding that produced the endpoint, measured on the round trip before it existed:
+
+```
+self-reported    integrity.ok: true  | replayMatched: true
+independent      integrity.ok: true  | replayMatched: false   ← published payload, no bars
+```
+
+The desk runs both paths against itself from the Integrity tab (`Re-verify through the public API`)
+and shows the two verdicts side by side, so a divergence between what it claims and what it can
+prove is visible on the desk rather than only to whoever thought to check.
+
+What this still does not give you is **provenance**: the digests are unsigned, so a green verdict
+says the book is self-consistent and protocol-rooted, not that this desk produced it. The forged
+chain in [case study 01](docs/case-studies/01-forged-genesis.md) was internally flawless.
 
 ## Authorship
 
