@@ -1,0 +1,23 @@
+
+== linear drift over the full 63-bar seed window (15.75h)  (min_move=0.00168 = 0.168%) ==
+ drift seed_spread tick1_spread     peak ticks>floor   secs  ticks>0
+  0.5%      0.052%       0.051%   0.051%           0      0     3000
+  1.0%      0.104%       0.101%   0.101%           0      0     3000
+  2.0%      0.205%       0.201%   0.201%           4     20     3000
+  4.0%      0.404%       0.396%   0.396%          13     65     3000
+
+== ramp over the LAST 21 bars (5.25h), flat before  (min_move=0.00168 = 0.168%) ==
+ drift seed_spread tick1_spread     peak ticks>floor   secs  ticks>0
+  0.5%      0.123%       0.122%   0.122%           0      0     3000
+  1.0%      0.245%       0.244%   0.244%           8     40     3000
+  2.0%      0.486%       0.485%   0.485%          16     80     3000
+  4.0%      0.961%       0.958%   0.958%          23    115     3000
+
+== ramp over the LAST 8 bars (2h), flat before  (min_move=0.00168 = 0.168%) ==
+ drift seed_spread tick1_spread     peak ticks>floor   secs  ticks>0
+  0.5%      0.144%       0.155%   0.161%           0      0     3000
+  1.0%      0.287%       0.310%   0.321%          13     65     3000
+  2.0%      0.572%       0.618%   0.639%          21    105     3000
+  4.0%      1.137%       1.227%   1.266%          28    140     3000
+
+seed-weight half-life: fast 2.76 ticks, slow 7.27 ticks
