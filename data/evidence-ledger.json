@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-10",
+  "generatedAt": "2026-10-04",
   "note": "Preregistered evaluations and adversarial audits run against this author's systems. Every entry is code-confirmed: reproduced from probe or runner output, not inferred from reading. Confidence intervals are reproduced as recorded at measurement time. No entry is a trading performance claim.",
   "gates": [
     {
@@ -64,6 +64,55 @@
     }
   ],
   "audits": [
+    {
+      "id": "ema-warmup-clock-2026-10-04",
+      "title": "Does a restart test the 5-second entry gate against a 15-minute-clock EMA spread?",
+      "system": "private trading stack",
+      "measuredAt": "2026-10-04",
+      "method": "Hermetic replay against the stack's own TrendTracker at main 5c2b744: a tracker seeded exactly as the startup warm-up seeds it (63 fifteen-minute closes appended, EMA cache computed from that list), then fed flat 5-second ticks through the real update() with the spread captured where the decision log reads it. A pure-math replica reproduces every tick. Box artifacts were not reachable from this session, so every restart-adjacent count is UNMEASURED and ships with the read-only census script that produces it.",
+      "headline": "For 20 to 140 seconds after a restart the entry floor is compared against a 2-hour-versus-5-hour EMA spread; the real update() emits BUY on the first post-restart tick and the pullback wait is armed and satisfied inside that same tick.",
+      "findings": [
+        {
+          "ref": "W1",
+          "severity": "warning",
+          "summary": "the entry precondition curr_spread > min_move is evaluated on the 15-minute seed clock for the first 4 to 28 ticks: a 2 percent rise over the prior 2 hours seeds a 0.57 percent spread against a 0.168 percent floor and BUY emits on tick 1 in the real code",
+          "status": "Open — box x/n pending"
+        },
+        {
+          "ref": "W2",
+          "severity": "warning",
+          "summary": "pullback entry is a no-op on the restart tick: _pullback_pending goes True then False inside tick 1 because price sits above the stale fast EMA",
+          "status": "Open — pre-existing property, wider than restarts"
+        },
+        {
+          "ref": "W3",
+          "severity": "warning",
+          "summary": "with zero drift and 0.3 percent per-bar noise, 9 of 30 seeded replicates clear the floor on tick 1; the floor was sized for the 5-second clock and the 15-minute clock carries roughly 13x the spread scale",
+          "status": "Measured offline; box share UNMEASURED"
+        },
+        {
+          "ref": "W4",
+          "severity": "warning",
+          "summary": "the decision-log flush counter advances once per 30-tick reporting window, so the configured 30-tick flush is 75 minutes and the 1000-record buffer cap decides whether the momentum monitor can see the restart window at all",
+          "status": "Observed, not fixed here"
+        },
+        {
+          "ref": "W5",
+          "severity": "ok",
+          "summary": "restart-adjacent alert pairs and trend_ema BUY fills: no number is quoted because the box files were out of reach; the census script prints the integers",
+          "status": "UNMEASURED — command handed to the operator"
+        }
+      ],
+      "shipped": [
+        "docs/audits/2026-10-04-ema-warmup-clock/decay.py — pure-math seed-and-decay table, no stack imports (sha256 3d91a116…)",
+        "docs/audits/2026-10-04-ema-warmup-clock/real_path.py and real_path_out.json — the replay through the real TrendTracker.update() with the per-tick record (artifact sha256 ad737022…)",
+        "docs/audits/2026-10-04-ema-warmup-clock/box_restart_xn.py — read-only box census: restart markers, RETURN→DRY pairs, trend_ema BUY fills inside 300 s, first flushed row per symbol versus the floor"
+      ],
+      "verdict": "OPEN",
+      "reopenCondition": "Closes as alert-noise-only when the box census reports 0 trend_ema BUY fills inside 300 s of a restart and 0 first-post-restart rows above the floor across every retained restart. Any nonzero count in either reopens it as an entry-path defect and starts the flag-OFF restart-quarantine PR described in the audit, with its kill-test.",
+      "caseStudy": "docs/audits/2026-10-04-ema-warmup-clock-mismatch.md",
+      "link": null
+    },
     {
       "id": "verifier-adversarial-2026-09-04",
       "title": "Does verifyIntegrity actually perform the checks it reports?",
